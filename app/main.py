@@ -1,22 +1,13 @@
-import asyncio
 from contextlib import asynccontextmanager
 
-from alembic import command
-from alembic.config import Config
 from fastapi import FastAPI
 from sqlalchemy import text
 
 from app.database import engine
 
 
-def _run_migrations() -> None:
-    alembic_cfg = Config("alembic.ini")
-    command.upgrade(alembic_cfg, "head")
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await asyncio.to_thread(_run_migrations)
     yield
     await engine.dispose()
 
