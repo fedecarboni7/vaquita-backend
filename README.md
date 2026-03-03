@@ -30,8 +30,8 @@ Diferenciales clave:
 ## 🏗️ Stack
 
 * FastAPI
-* SQLModel / SQLAlchemy
-* PostgreSQL (SQLite en local)
+* SQLAlchemy + Pydantic
+* PostgreSQL
 * LLM con tool calling
 
 ---
