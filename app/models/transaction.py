@@ -1,11 +1,15 @@
 import enum
 import uuid
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
-from sqlalchemy import Date, DateTime, Enum, Index, Numeric, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Date, DateTime, Enum, ForeignKey, Index, Numeric, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 
 class TransactionType(str, enum.Enum):
@@ -22,8 +26,13 @@ class Transaction(Base):
         default=uuid.uuid4,
     )
     user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id"),
         nullable=False,
         index=True,
+    )
+
+    user: Mapped["User"] = relationship(
+        back_populates="transactions",
     )
     amount: Mapped[float] = mapped_column(
         Numeric(precision=14, scale=2),
@@ -75,6 +84,4 @@ class Transaction(Base):
         nullable=False,
     )
 
-    __table_args__ = (
-        Index("ix_transactions_user_id_expense_date", "user_id", "expense_date"),
-    )
+    __table_args__ = (Index("ix_transactions_user_id_expense_date", "user_id", "expense_date"),)
