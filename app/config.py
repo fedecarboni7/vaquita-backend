@@ -9,5 +9,11 @@ class Settings(BaseSettings):
 
     DATABASE_URL: str = "postgresql+asyncpg://expenses_user:expenses_pass@localhost:5432/expenses_db"
 
+    GOOGLE_CLIENT_ID: str = ""
+    JWT_SECRET_KEY: str = ""
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRATION_MINUTES: int = 1440  # 24 hours
+    FRONTEND_URL: str = "http://localhost:5173"
+
 
 settings = Settings()
