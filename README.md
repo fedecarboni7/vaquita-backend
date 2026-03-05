@@ -1,45 +1,79 @@
-# 🧠 Expenses Tracker Backend
+# Expenses Tracker — Backend
 
 Backend de una aplicación de gastos impulsada por IA. Permite registrar gastos en lenguaje natural y consultar la información mediante un agente conversacional que utiliza herramientas determinísticas sobre la base de datos.
 
 ---
 
-## 🚀 Propósito
+## Propósito
 
 Construir **la forma más rápida y privada de entender tus gastos personales usando IA**.
 
 Diferenciales clave:
 
-* Registro de gastos por chat (lenguaje natural)
-* Agente de IA que responde preguntas financieras
-* Cálculos realizados en SQL (no en el LLM)
-* Arquitectura channel‑agnostic (web, Telegram, etc.)
-* Enfoque privacy‑first
+- Registro de transacciones por chat en lenguaje natural
+- Agente de IA con herramientas determinísticas sobre la base de datos
+- Cálculos realizados en SQL (no en el LLM)
 
 ---
 
-## 🧩 Capacidades (MVP)
+## Stack
 
-* Crear y listar gastos
-* Parseo de gastos desde texto libre
-* Endpoint conversacional (`/chat`)
-* Tools financieras (ej: mayor gasto del mes, gasto por categoría)
-
----
-
-## 🏗️ Stack
-
-* FastAPI
-* SQLAlchemy + Pydantic
-* PostgreSQL
-* LLM con tool calling
-
----
-
-## 📌 Estado
-
-🚧 En desarrollo inicial
+| Capa | Tecnología |
+|---|---|
+| Lenguaje | Python 3.12 |
+| Gestor de paquetes | uv |
+| Framework web | FastAPI |
+| Base de datos | PostgreSQL |
+| ORM | SQLAlchemy (async) + asyncpg |
+| Migraciones | Alembic |
+| Orquestación de IA | LangChain + LangGraph |
+| LLM | Gemini (Google AI Studio) |
+| Auth | python-jose (JWT) + Google OAuth |
+| Linting / formato | Ruff |
+| Tests | pytest + pytest-asyncio |
 
 ---
 
-> Registrar gastos debería sentirse como chatear. La privacidad no es negociable.
+## Cómo ejecutar
+
+### Con uv (desarrollo)
+
+```bash
+uv sync
+uv run fastapi dev
+```
+
+### Con Docker
+
+```bash
+docker compose up
+```
+
+---
+
+## Migraciones
+
+```bash
+# Crear una nueva migración
+uv run alembic revision --autogenerate -m "descripción"
+
+# Aplicar migraciones
+uv run alembic upgrade head
+
+# Revertir la última migración
+uv run alembic downgrade -1
+```
+
+---
+
+## Tests
+
+```bash
+uv run pytest
+```
+
+---
+
+## Estado
+
+🚧 En desarrollo activo
