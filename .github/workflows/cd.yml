@@ -1,14 +1,15 @@
 name: CD
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
     branches: [main]
+    types: [completed]
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    needs: []
-    # Solo deploya si el CI pasó (el CI corre en el mismo push a main)
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
       - uses: actions/checkout@v4
 
