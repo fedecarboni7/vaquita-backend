@@ -18,11 +18,7 @@ async def list_categories(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[CategoryResponse]:
-    result = await session.execute(
-        select(Category)
-        .where(Category.user_id == current_user.id)
-        .order_by(Category.name)
-    )
+    result = await session.execute(select(Category).where(Category.user_id == current_user.id).order_by(Category.name))
     return result.scalars().all()
 
 

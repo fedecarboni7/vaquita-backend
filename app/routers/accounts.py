@@ -18,11 +18,7 @@ async def list_accounts(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> list[AccountResponse]:
-    result = await session.execute(
-        select(Account)
-        .where(Account.user_id == current_user.id)
-        .order_by(Account.name)
-    )
+    result = await session.execute(select(Account).where(Account.user_id == current_user.id).order_by(Account.name))
     return result.scalars().all()
 
 
