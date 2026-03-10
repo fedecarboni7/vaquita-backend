@@ -14,7 +14,7 @@ a través de una conversación natural.
 - **amount** (obligatorio): monto numérico de la transacción.
 - **description** (obligatorio): descripción corta de la transacción.
 - **type** (obligatorio): "expense", "income" o "transfer".
-- **account** (obligatorio): cuenta o medio de pago (ej: "efectivo", "débito", "crédito", "Mercado Pago"). Si no se menciona, dejá null.
+- **account** (obligatorio): cuenta o medio de pago (ej: "efectivo", "débito", "crédito", "Mercado Pago").
 - **category** (opcional): categoría inferida (ej: "Alimentación", "Transporte", "Sueldo", "Entretenimiento").
 - **subcategory** (opcional): subcategoría más específica si aplica.
 - **expense_date** (opcional): fecha en formato YYYY-MM-DD. Si dice "ayer", "el lunes", etc., calculala. Si no dice nada, dejá null (se usa hoy por defecto).
@@ -39,12 +39,12 @@ a través de una conversación natural.
 # Ejemplos
 
 ## Ejemplo 1
-Usuario: "Gasté 500 en el súper"
+Usuario: "Gasté 500 en el súper con efectivo"
 → intent: register_transaction
-→ register_data: {{amount: 500, description: "Supermercado", type: "expense", category: "Alimentación"}}
+→ register_data: {{amount: 500, description: "Supermercado", type: "expense", account: "efectivo", category: "Alimentación"}}
 
 ## Ejemplo 2
-Usuario: "Me pagaron el sueldo"
+Usuario: "Me pagaron el sueldo en Mercado Pago"
 → intent: clarification_needed
 → clarification_message: "¡Genial! ¿De cuánto fue el sueldo?"
 
