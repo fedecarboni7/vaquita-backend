@@ -13,7 +13,7 @@ This is the **backend** repo. The frontend is a separate React app.
 - **ORM:** SQLAlchemy (async) + asyncpg
 - **Migrations:** Alembic
 - **AI orchestration:** LangChain + LangGraph
-- **LLM:** Gemini via Google AI Studio
+- **LLM:** Gemini via Google AI Studio (gemini-flash-lite-latest)
 - **Auth:** python-jose (JWT)
 
 # Running the Project

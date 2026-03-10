@@ -8,6 +8,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.account import Account
+    from app.models.category import Category
     from app.models.transaction import Transaction
 
 
@@ -47,5 +49,11 @@ class User(Base):
     )
 
     transactions: Mapped[list["Transaction"]] = relationship(
+        back_populates="user",
+    )
+    accounts: Mapped[list["Account"]] = relationship(
+        back_populates="user",
+    )
+    categories: Mapped[list["Category"]] = relationship(
         back_populates="user",
     )

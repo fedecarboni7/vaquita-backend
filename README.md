@@ -27,7 +27,7 @@ Diferenciales clave:
 | ORM | SQLAlchemy (async) + asyncpg |
 | Migraciones | Alembic |
 | Orquestación de IA | LangChain + LangGraph |
-| LLM | Gemini (Google AI Studio) |
+| LLM | Gemini (gemini-flash-lite-latest) |
 | Auth | python-jose (JWT) + Google OAuth |
 | Linting / formato | Ruff |
 | Tests | pytest + pytest-asyncio |
