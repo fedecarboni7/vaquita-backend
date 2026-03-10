@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_MINUTES: int = 1440  # 24 hours
     FRONTEND_URL: str = "http://localhost:5173"
+    GOOGLE_API_KEY: str = ""
 
 
 settings = Settings()
