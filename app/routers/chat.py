@@ -23,14 +23,10 @@ async def chat(
     current_message = body.messages[-1].content
     history = [msg.model_dump() for msg in body.messages[:-1]] if len(body.messages) > 1 else None
 
-    cat_result = await session.execute(
-        select(Category.name).where(Category.user_id == current_user.id)
-    )
+    cat_result = await session.execute(select(Category.name).where(Category.user_id == current_user.id))
     categories = [row[0] for row in cat_result.all()]
 
-    acc_result = await session.execute(
-        select(Account.name).where(Account.user_id == current_user.id)
-    )
+    acc_result = await session.execute(select(Account.name).where(Account.user_id == current_user.id))
     accounts = [row[0] for row in acc_result.all()]
 
     result = await run_agent(

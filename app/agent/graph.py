@@ -56,11 +56,13 @@ async def run_agent(
 
     messages.append(HumanMessage(content=message))
 
-    result = await _agent.ainvoke({
-        "messages": messages,
-        "categories": categories or [],
-        "accounts": accounts or [],
-    })
+    result = await _agent.ainvoke(
+        {
+            "messages": messages,
+            "categories": categories or [],
+            "accounts": accounts or [],
+        }
+    )
 
     last_ai_message = result["messages"][-1]
 
