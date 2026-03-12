@@ -18,12 +18,10 @@ from app.agent.schemas import (
 from app.agent.state import AgentState
 from app.config import settings
 
-_LLM_MODEL = "gemini-flash-lite-latest"
-
 
 def _get_llm():
     return ChatGoogleGenerativeAI(
-        model=_LLM_MODEL,
+        model=settings.LLM_MODEL,
         google_api_key=settings.GOOGLE_API_KEY,
     )
 
