@@ -23,7 +23,7 @@ class TransactionUpdate(BaseModel):
     amount: float | None = None
     description: str | None = None
     type: Literal["expense", "income", "transfer"] | None = None
-    account: str
+    account: str | None = None
     expense_date: date | None = None
     category: str | None = None
     subcategory: str | None = None
@@ -31,6 +31,12 @@ class TransactionUpdate(BaseModel):
     note: str | None = None
     installments: int | None = None
     account_destination: str | None = None
+
+
+class PaginatedTransactionsResponse(BaseModel):
+    items: list["TransactionResponse"]
+    total: int
+    has_more: bool
 
 
 class TransactionResponse(BaseModel):

@@ -2,42 +2,62 @@ import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_session
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
-from app.schemas.expenses import TransactionCreate, TransactionResponse, TransactionUpdate
+from app.schemas.expenses import (
+    PaginatedTransactionsResponse,
+    TransactionCreate,
+    TransactionResponse,
+    TransactionUpdate,
+)
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
 
 
-@router.get("", response_model=list[TransactionResponse])
+@router.get("", response_model=PaginatedTransactionsResponse)
 async def list_expenses(
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
     category: str | None = Query(None),
+    account: str | None = Query(None),
     type: str | None = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> list[TransactionResponse]:
-    query = select(Transaction).where(Transaction.user_id == current_user.id)
+) -> PaginatedTransactionsResponse:
+    base_query = select(Transaction).where(Transaction.user_id == current_user.id)
 
     if date_from:
-        query = query.where(Transaction.expense_date >= date_from)
+        base_query = base_query.where(Transaction.expense_date >= date_from)
     if date_to:
-        query = query.where(Transaction.expense_date <= date_to)
+        base_query = base_query.where(Transaction.expense_date <= date_to)
     if category:
-        query = query.where(Transaction.category == category)
+        base_query = base_query.where(Transaction.category == category)
+    if account:
+        base_query = base_query.where(Transaction.account == account)
     if type:
-        query = query.where(Transaction.type == TransactionType(type))
+        base_query = base_query.where(Transaction.type == TransactionType(type))
 
-    query = query.order_by(Transaction.expense_date.desc())
+    count_result = await session.execute(
+        select(func.count()).select_from(base_query.subquery())
+    )
+    total = count_result.scalar_one()
 
-    result = await session.execute(query)
-    return result.scalars().all()
+    items_query = base_query.order_by(Transaction.expense_date.desc()).limit(limit).offset(offset)
+    result = await session.execute(items_query)
+    items = result.scalars().all()
+
+    return PaginatedTransactionsResponse(
+        items=items,
+        total=total,
+        has_more=(offset + limit) < total,
+    )
 
 
 @router.post("", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
