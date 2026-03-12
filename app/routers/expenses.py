@@ -44,9 +44,7 @@ async def list_expenses(
     if type:
         base_query = base_query.where(Transaction.type == TransactionType(type))
 
-    count_result = await session.execute(
-        select(func.count()).select_from(base_query.subquery())
-    )
+    count_result = await session.execute(select(func.count()).select_from(base_query.subquery()))
     total = count_result.scalar_one()
 
     items_query = base_query.order_by(Transaction.expense_date.desc()).limit(limit).offset(offset)
