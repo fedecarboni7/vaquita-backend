@@ -7,7 +7,9 @@ from app.agent.schemas import ClassifierOutput
 
 class AgentState(MessagesState):
     classifier_output: ClassifierOutput | None = None
+    extractor_output: dict[str, Any] | None = None
     response_type: str | None = None
     response_payload: dict[str, Any] | None = None
-    categories: list[str] = []
+    expense_categories: list[str] = []
+    income_categories: list[str] = []
     accounts: list[str] = []

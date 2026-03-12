@@ -15,6 +15,8 @@ class TransactionCreate(BaseModel):
     subcategory: str | None = None
     currency: str = "ARS"
     note: str | None = None
+    installments: int | None = None
+    account_destination: str | None = None
 
 
 class TransactionUpdate(BaseModel):
@@ -27,6 +29,8 @@ class TransactionUpdate(BaseModel):
     subcategory: str | None = None
     currency: str | None = None
     note: str | None = None
+    installments: int | None = None
+    account_destination: str | None = None
 
 
 class TransactionResponse(BaseModel):
@@ -42,5 +46,7 @@ class TransactionResponse(BaseModel):
     subcategory: str | None = None
     currency: str
     note: str | None = None
+    installments: int | None = None
+    account_destination: str | None = None
     created_at: datetime
     updated_at: datetime
