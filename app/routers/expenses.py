@@ -57,6 +57,8 @@ async def create_expense(
         subcategory=body.subcategory,
         description=body.description,
         note=body.note,
+        installments=body.installments,
+        account_destination=body.account_destination,
         expense_date=body.expense_date,
     )
     session.add(transaction)

@@ -23,8 +23,15 @@ async def chat(
     current_message = body.messages[-1].content
     history = [msg.model_dump() for msg in body.messages[:-1]] if len(body.messages) > 1 else None
 
-    cat_result = await session.execute(select(Category.name).where(Category.user_id == current_user.id))
-    categories = [row[0] for row in cat_result.all()]
+    cat_expense_result = await session.execute(
+        select(Category.name).where(Category.user_id == current_user.id, Category.type == "expense")
+    )
+    expense_categories = [row[0] for row in cat_expense_result.all()]
+
+    cat_income_result = await session.execute(
+        select(Category.name).where(Category.user_id == current_user.id, Category.type == "income")
+    )
+    income_categories = [row[0] for row in cat_income_result.all()]
 
     acc_result = await session.execute(select(Account.name).where(Account.user_id == current_user.id))
     accounts = [row[0] for row in acc_result.all()]
@@ -32,7 +39,8 @@ async def chat(
     result = await run_agent(
         message=current_message,
         history=history,
-        categories=categories,
+        expense_categories=expense_categories,
+        income_categories=income_categories,
         accounts=accounts,
     )
 

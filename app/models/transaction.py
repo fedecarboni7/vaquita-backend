@@ -67,6 +67,13 @@ class Transaction(Base):
         Text,
         nullable=True,
     )
+    installments: Mapped[int | None] = mapped_column(
+        nullable=True,
+    )
+    account_destination: Mapped[str | None] = mapped_column(
+        String(100),
+        nullable=True,
+    )
     expense_date: Mapped[date] = mapped_column(
         Date,
         nullable=False,

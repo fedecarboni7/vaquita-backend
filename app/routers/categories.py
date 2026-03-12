@@ -32,6 +32,7 @@ async def create_category(
         id=uuid.uuid4(),
         user_id=current_user.id,
         name=body.name,
+        type=body.type,
     )
     session.add(category)
     await session.commit()

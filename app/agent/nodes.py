@@ -3,77 +3,178 @@ from datetime import date
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from app.agent.prompts import SYSTEM_PROMPT
-from app.agent.schemas import ClassifierOutput
+from app.agent.prompts import (
+    CLASSIFIER_PROMPT,
+    EXPENSE_EXTRACTOR_PROMPT,
+    INCOME_EXTRACTOR_PROMPT,
+    TRANSFER_EXTRACTOR_PROMPT,
+)
+from app.agent.schemas import (
+    ClassifierOutput,
+    ExpenseExtractorOutput,
+    IncomeExtractorOutput,
+    TransferExtractorOutput,
+)
 from app.agent.state import AgentState
 from app.config import settings
 
+_LLM_MODEL = "gemini-flash-lite-latest"
 
-def _build_system_message(categories: list[str], accounts: list[str]) -> SystemMessage:
-    cat_text = ", ".join(categories) if categories else "inferí la categoría."
-    acc_text = ", ".join(accounts) if accounts else "el usuario puede usar cualquier cuenta."
-    prompt = SYSTEM_PROMPT.format(
-        categories=cat_text,
-        accounts=acc_text,
-        today=date.today().isoformat(),
+
+def _get_llm():
+    return ChatGoogleGenerativeAI(
+        model=_LLM_MODEL,
+        google_api_key=settings.GOOGLE_API_KEY,
     )
-    return SystemMessage(content=prompt)
 
 
 def classify(state: AgentState) -> dict:
-    """Single LLM call that classifies intent and extracts structured data."""
-    llm = ChatGoogleGenerativeAI(
-        model="gemini-flash-lite-latest",
-        google_api_key=settings.GOOGLE_API_KEY,
-    )
-    structured_llm = llm.with_structured_output(ClassifierOutput)
+    """Classify user intent using the LLM."""
+    llm = _get_llm().with_structured_output(ClassifierOutput)
 
-    system_msg = _build_system_message(state.get("categories", []), state.get("accounts", []))
+    system_msg = SystemMessage(content=CLASSIFIER_PROMPT.format(today=date.today().isoformat()))
     messages = [system_msg, *state["messages"]]
-    result: ClassifierOutput = structured_llm.invoke(messages)
+    result: ClassifierOutput = llm.invoke(messages)
 
     return {"classifier_output": result}
 
 
-def handle_register(state: AgentState) -> dict:
-    """Build a draft response from the classified register data."""
-    output = state["classifier_output"]
-    data = output.register_data
+def extract_expense(state: AgentState) -> dict:
+    """Extract expense fields from the user message."""
+    llm = _get_llm().with_structured_output(ExpenseExtractorOutput)
 
-    payload = data.model_dump(exclude_none=True)
+    accounts = state.get("accounts", [])
+    acc_text = ", ".join(accounts) if accounts else "No hay cuentas definidas."
+    categories = state.get("expense_categories", [])
+    cat_text = ", ".join(categories) if categories else "Inferí la categoría."
 
-    summary_parts = [f"${data.amount:.2f}", data.description]
-    if data.account:
-        summary_parts.append(f"({data.account})")
-    if data.category:
-        summary_parts.append(f"[{data.category}]")
+    system_msg = SystemMessage(
+        content=EXPENSE_EXTRACTOR_PROMPT.format(
+            accounts=acc_text,
+            expense_categories=cat_text,
+            today=date.today().isoformat(),
+        )
+    )
+    result: ExpenseExtractorOutput = llm.invoke([system_msg, *state["messages"]])
 
-    message = f"Registré: {' — '.join(summary_parts)}"
+    return {"extractor_output": result.model_dump(exclude_none=True)}
+
+
+def extract_income(state: AgentState) -> dict:
+    """Extract income fields from the user message."""
+    llm = _get_llm().with_structured_output(IncomeExtractorOutput)
+
+    accounts = state.get("accounts", [])
+    acc_text = ", ".join(accounts) if accounts else "No hay cuentas definidas."
+    categories = state.get("income_categories", [])
+    cat_text = ", ".join(categories) if categories else "Inferí la categoría."
+
+    system_msg = SystemMessage(
+        content=INCOME_EXTRACTOR_PROMPT.format(
+            accounts=acc_text,
+            income_categories=cat_text,
+            today=date.today().isoformat(),
+        )
+    )
+    result: IncomeExtractorOutput = llm.invoke([system_msg, *state["messages"]])
+
+    return {"extractor_output": result.model_dump(exclude_none=True)}
+
+
+def extract_transfer(state: AgentState) -> dict:
+    """Extract transfer fields from the user message."""
+    llm = _get_llm().with_structured_output(TransferExtractorOutput)
+
+    accounts = state.get("accounts", [])
+    acc_text = ", ".join(accounts) if accounts else "No hay cuentas definidas."
+
+    system_msg = SystemMessage(
+        content=TRANSFER_EXTRACTOR_PROMPT.format(
+            accounts=acc_text,
+            today=date.today().isoformat(),
+        )
+    )
+    result: TransferExtractorOutput = llm.invoke([system_msg, *state["messages"]])
+
+    return {"extractor_output": result.model_dump(exclude_none=True)}
+
+
+def _fuzzy_match(value: str, valid_options: list[str]) -> str:
+    """Try case-insensitive match against valid options. Return original if no match."""
+    lower = value.lower()
+    for option in valid_options:
+        if option.lower() == lower:
+            return option
+    return value
+
+
+def validate(state: AgentState) -> dict:
+    """Validate extracted fields against user's real accounts and categories."""
+    data = dict(state["extractor_output"])
+    subtype = state["classifier_output"].subtype
+    accounts = state.get("accounts", [])
+
+    # Add transaction type
+    data["type"] = subtype
+
+    # Validate account
+    if "account" in data and accounts:
+        data["account"] = _fuzzy_match(data["account"], accounts)
+
+    # Validate account_destination for transfers
+    if "account_destination" in data and accounts:
+        data["account_destination"] = _fuzzy_match(data["account_destination"], accounts)
+
+    # Validate category
+    if "category" in data:
+        if subtype == "expense":
+            categories = state.get("expense_categories", [])
+        elif subtype == "income":
+            categories = state.get("income_categories", [])
+        else:
+            categories = []
+
+        if categories:
+            data["category"] = _fuzzy_match(data["category"], categories)
+
+    # Build summary message
+    parts = [f"${data['amount']:.2f}", data.get("description", "")]
+    if data.get("account"):
+        parts.append(f"({data['account']})")
+    if data.get("category"):
+        parts.append(f"[{data['category']}]")
+
+    message = f"Registré: {' — '.join(parts)}"
 
     return {
         "response_type": "draft",
-        "response_payload": payload,
+        "response_payload": data,
         "messages": [AIMessage(content=message)],
     }
 
 
-def handle_direct(state: AgentState) -> dict:
-    """Handle direct_answer, clarification_needed, and out_of_scope intents."""
+def handle_clarification(state: AgentState) -> dict:
+    """Return the clarification message from the classifier."""
     output = state["classifier_output"]
-    intent = output.intent
-
-    if intent == "clarification_needed":
-        text = output.clarification_message or "¿Podrías darme más detalles?"
-        response_type = "clarification"
-    elif intent == "direct_answer":
-        text = output.direct_answer_data.message if output.direct_answer_data else "No tengo una respuesta para eso."
-        response_type = "answer"
-    else:  # out_of_scope
-        text = "Eso está fuera de lo que puedo ayudarte. Soy un asistente de finanzas personales."
-        response_type = "answer"
+    text = output.clarification_message or "¿Podrías darme más detalles?"
 
     return {
-        "response_type": response_type,
+        "response_type": "clarification",
+        "response_payload": None,
+        "messages": [AIMessage(content=text)],
+    }
+
+
+def handle_direct_answer(state: AgentState) -> dict:
+    """Return the direct answer message from the classifier."""
+    output = state["classifier_output"]
+    text = (
+        output.direct_answer_message
+        or "Soy un asistente de finanzas personales. Podés registrar gastos, ingresos y transferencias mandándome un mensaje."
+    )
+
+    return {
+        "response_type": "answer",
         "response_payload": None,
         "messages": [AIMessage(content=text)],
     }
