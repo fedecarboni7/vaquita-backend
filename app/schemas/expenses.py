@@ -12,7 +12,7 @@ class TransactionCreate(BaseModel):
     account: str
     expense_date: date
     category: str | None = None
-    subcategory: str | None = None
+    subcategory_id: uuid.UUID | None = None
     currency: str = "ARS"
     note: str | None = None
     installments: int | None = None
@@ -26,7 +26,7 @@ class TransactionUpdate(BaseModel):
     account: str | None = None
     expense_date: date | None = None
     category: str | None = None
-    subcategory: str | None = None
+    subcategory_id: uuid.UUID | None = None
     currency: str | None = None
     note: str | None = None
     installments: int | None = None
@@ -49,7 +49,8 @@ class TransactionResponse(BaseModel):
     account: str
     expense_date: date
     category: str | None = None
-    subcategory: str | None = None
+    subcategory_id: uuid.UUID | None = None
+    subcategory_name: str | None = None
     currency: str
     note: str | None = None
     installments: int | None = None
