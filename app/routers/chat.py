@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.agent.graph import run_agent
 from app.auth import get_current_user
@@ -24,14 +25,36 @@ async def chat(
     history = [msg.model_dump() for msg in body.messages[:-1]] if len(body.messages) > 1 else None
 
     cat_expense_result = await session.execute(
-        select(Category.name).where(Category.user_id == current_user.id, Category.type == "expense")
+        select(Category)
+        .options(selectinload(Category.subcategories))
+        .where(Category.user_id == current_user.id, Category.type == "expense")
     )
-    expense_categories = [row[0] for row in cat_expense_result.all()]
+    expense_category_rows = cat_expense_result.scalars().all()
+    expense_categories = [category.name for category in expense_category_rows]
+    expense_category_tree: list[dict] = []
+    expense_subcategory_index: dict[str, dict[str, str]] = {}
+    for category in expense_category_rows:
+        subcategories = [subcategory.name for subcategory in category.subcategories]
+        expense_category_tree.append({"category": category.name, "subcategories": subcategories})
+        expense_subcategory_index[category.name] = {
+            subcategory.name: str(subcategory.id) for subcategory in category.subcategories
+        }
 
     cat_income_result = await session.execute(
-        select(Category.name).where(Category.user_id == current_user.id, Category.type == "income")
+        select(Category)
+        .options(selectinload(Category.subcategories))
+        .where(Category.user_id == current_user.id, Category.type == "income")
     )
-    income_categories = [row[0] for row in cat_income_result.all()]
+    income_category_rows = cat_income_result.scalars().all()
+    income_categories = [category.name for category in income_category_rows]
+    income_category_tree: list[dict] = []
+    income_subcategory_index: dict[str, dict[str, str]] = {}
+    for category in income_category_rows:
+        subcategories = [subcategory.name for subcategory in category.subcategories]
+        income_category_tree.append({"category": category.name, "subcategories": subcategories})
+        income_subcategory_index[category.name] = {
+            subcategory.name: str(subcategory.id) for subcategory in category.subcategories
+        }
 
     acc_result = await session.execute(select(Account.name).where(Account.user_id == current_user.id))
     accounts = [row[0] for row in acc_result.all()]
@@ -41,6 +64,10 @@ async def chat(
         history=history,
         expense_categories=expense_categories,
         income_categories=income_categories,
+        expense_category_tree=expense_category_tree,
+        income_category_tree=income_category_tree,
+        expense_subcategory_index=expense_subcategory_index,
+        income_subcategory_index=income_subcategory_index,
         accounts=accounts,
     )
 

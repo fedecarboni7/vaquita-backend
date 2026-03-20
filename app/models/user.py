@@ -10,6 +10,7 @@ from app.models.base import Base
 if TYPE_CHECKING:
     from app.models.account import Account
     from app.models.category import Category
+    from app.models.subcategory import Subcategory
     from app.models.transaction import Transaction
 
 
@@ -55,5 +56,8 @@ class User(Base):
         back_populates="user",
     )
     categories: Mapped[list["Category"]] = relationship(
+        back_populates="user",
+    )
+    subcategories: Mapped[list["Subcategory"]] = relationship(
         back_populates="user",
     )

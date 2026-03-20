@@ -65,7 +65,7 @@ Tu única tarea es extraer los campos de la transacción con la mayor precisión
 - **description** (obligatorio): descripción corta del gasto.
 - **account** (obligatorio): cuenta con la que pagó. Si mencionó una de las cuentas disponibles, usala exactamente. Si no la mencionó, usá "No definido".
 - **category** (opcional): categoría del gasto según las disponibles.
-- **subcategory** (opcional): subcategoría más específica si aplica.
+- **subcategory_name** (opcional): nombre de subcategoría más específica si aplica.
 - **expense_date** (opcional): fecha en formato YYYY-MM-DD. Calculá fechas relativas como "ayer" o "el lunes" en base a la fecha de hoy. Si no se menciona, dejá null.
 - **currency** (opcional): "ARS" por defecto siempre. Usá "USD" solo si el usuario menciona explícitamente dólares, USD, dólar, dolares, o similar.
 - **installments** (opcional): número de cuotas entre 1 y 60. Incluir solo si el usuario lo menciona, si no omitir.
@@ -74,7 +74,7 @@ Tu única tarea es extraer los campos de la transacción con la mayor precisión
 # Cuentas del usuario
 {accounts}
 
-# Categorías de gastos disponibles
+# Categorías de gastos y subcategorías disponibles
 {expense_categories}
 
 # Fecha de hoy
@@ -84,15 +84,15 @@ Tu única tarea es extraer los campos de la transacción con la mayor precisión
 
 ## Ejemplo 1
 Usuario: "Gasté 500 en el súper con efectivo"
-→ {{amount: 500, description: "Supermercado", account: "efectivo", category: "Alimentación", subcategory: "Compras"}}
+→ {{amount: 500, description: "Supermercado", account: "efectivo", category: "Alimentación", subcategory_name: "Compras"}}
 
 ## Ejemplo 2
 Usuario: "Ayer cargué 2000 en la SUBE con débito"
-→ {{amount: 2000, description: "Carga SUBE", account: "débito", category: "Transporte", subcategory: "Transporte público", expense_date: "<ayer en YYYY-MM-DD>"}}
+→ {{amount: 2000, description: "Carga SUBE", account: "débito", category: "Transporte", subcategory_name: "Transporte público", expense_date: "<ayer en YYYY-MM-DD>"}}
 
 ## Ejemplo 3
 Usuario: "Compré una compu en 12 cuotas, 80000 pesos con la tarjeta"
-→ {{amount: 80000, description: "Computadora", account: "crédito", category: "Tecnología", subcategory: "Dispositivos", installments: 12}}
+→ {{amount: 80000, description: "Computadora", account: "crédito", category: "Tecnología", subcategory_name: "Dispositivos", installments: 12}}
 """
 
 INCOME_EXTRACTOR_PROMPT = """\
@@ -105,7 +105,7 @@ Tu única tarea es extraer los campos de la transacción con la mayor precisión
 - **description** (obligatorio): descripción corta del ingreso.
 - **account** (obligatorio): cuenta donde recibió el dinero. Si mencionó una de las cuentas disponibles, usala exactamente. Si no la mencionó, usá "No definido".
 - **category** (opcional): categoría del ingreso según las disponibles.
-- **subcategory** (opcional): subcategoría más específica si aplica.
+- **subcategory_name** (opcional): nombre de subcategoría más específica si aplica.
 - **expense_date** (opcional): fecha en formato YYYY-MM-DD. Calculá fechas relativas como "ayer" o "el lunes" en base a la fecha de hoy. Si no se menciona, dejá null.
 - **currency** (opcional): "ARS" por defecto siempre. Usá "USD" solo si el usuario menciona explícitamente dólares, USD, dólar, dolares, o similar.
 - **note** (opcional): contexto extra que mencione el usuario.
@@ -113,7 +113,7 @@ Tu única tarea es extraer los campos de la transacción con la mayor precisión
 # Cuentas del usuario
 {accounts}
 
-# Categorías de ingresos disponibles
+# Categorías de ingresos y subcategorías disponibles
 {income_categories}
 
 # Fecha de hoy
@@ -123,11 +123,11 @@ Tu única tarea es extraer los campos de la transacción con la mayor precisión
 
 ## Ejemplo 1
 Usuario: "Me depositaron el sueldo en Galicia, 500000 pesos"
-→ {{amount: 500000, description: "Sueldo", account: "Galicia", category: "Salario", subcategory: "Sueldo"}}
+→ {{amount: 500000, description: "Sueldo", account: "Galicia", category: "Salario", subcategory_name: "Sueldo"}}
 
 ## Ejemplo 2
 Usuario: "Me devolvieron 3000 pesos por Mercado Pago"
-→ {{amount: 3000, description: "Devolución", account: "Mercado Pago", category: "Otros ingresos", subcategory: "Devolución"}}
+→ {{amount: 3000, description: "Devolución", account: "Mercado Pago", category: "Otros ingresos", subcategory_name: "Devolución"}}
 """
 
 TRANSFER_EXTRACTOR_PROMPT = """\

@@ -16,7 +16,7 @@ class ExpenseExtractorOutput(BaseModel):
     description: str
     account: str
     category: str | None = None
-    subcategory: str | None = None
+    subcategory_name: str | None = None
     expense_date: str | None = None
     currency: str = "ARS"
     installments: int | None = None
@@ -28,7 +28,7 @@ class IncomeExtractorOutput(BaseModel):
     description: str
     account: str
     category: str | None = None
-    subcategory: str | None = None
+    subcategory_name: str | None = None
     expense_date: str | None = None
     currency: str = "ARS"
     note: str | None = None
