@@ -7,6 +7,11 @@ class GoogleAuthRequest(BaseModel):
     credential: str
 
 
+class DevAuthRequest(BaseModel):
+    email: str = "dev@local.test"
+    display_name: str | None = "Dev User"
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
