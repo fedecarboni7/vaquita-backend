@@ -43,8 +43,19 @@ def extract_expense(state: AgentState) -> dict:
 
     accounts = state.get("accounts", [])
     acc_text = ", ".join(accounts) if accounts else "No hay cuentas definidas."
-    categories = state.get("expense_categories", [])
-    cat_text = ", ".join(categories) if categories else "Inferí la categoría."
+    category_tree = state.get("expense_category_tree", [])
+    if category_tree:
+        cat_lines = []
+        for item in category_tree:
+            name = str(item.get("category", ""))
+            subcategories = item.get("subcategories", [])
+            if subcategories:
+                cat_lines.append(f"- {name}: {', '.join(subcategories)}")
+            else:
+                cat_lines.append(f"- {name}")
+        cat_text = "\n".join(cat_lines)
+    else:
+        cat_text = "Inferí la categoría."
 
     system_msg = SystemMessage(
         content=EXPENSE_EXTRACTOR_PROMPT.format(
@@ -64,8 +75,19 @@ def extract_income(state: AgentState) -> dict:
 
     accounts = state.get("accounts", [])
     acc_text = ", ".join(accounts) if accounts else "No hay cuentas definidas."
-    categories = state.get("income_categories", [])
-    cat_text = ", ".join(categories) if categories else "Inferí la categoría."
+    category_tree = state.get("income_category_tree", [])
+    if category_tree:
+        cat_lines = []
+        for item in category_tree:
+            name = str(item.get("category", ""))
+            subcategories = item.get("subcategories", [])
+            if subcategories:
+                cat_lines.append(f"- {name}: {', '.join(subcategories)}")
+            else:
+                cat_lines.append(f"- {name}")
+        cat_text = "\n".join(cat_lines)
+    else:
+        cat_text = "Inferí la categoría."
 
     system_msg = SystemMessage(
         content=INCOME_EXTRACTOR_PROMPT.format(
@@ -106,6 +128,22 @@ def _fuzzy_match(value: str, valid_options: list[str]) -> str:
     return value
 
 
+def _resolve_subcategory_id(
+    category_name: str,
+    subcategory_name: str,
+    subcategory_index: dict[str, dict[str, str]],
+) -> tuple[str, str | None]:
+    for indexed_category_name, subcategories in subcategory_index.items():
+        if indexed_category_name.lower() != category_name.lower():
+            continue
+
+        for indexed_subcategory_name, subcategory_id in subcategories.items():
+            if indexed_subcategory_name.lower() == subcategory_name.lower():
+                return indexed_subcategory_name, subcategory_id
+
+    return subcategory_name, None
+
+
 def validate(state: AgentState) -> dict:
     """Validate extracted fields against user's real accounts and categories."""
     data = dict(state["extractor_output"])
@@ -135,12 +173,35 @@ def validate(state: AgentState) -> dict:
         if categories:
             data["category"] = _fuzzy_match(data["category"], categories)
 
+    # Resolve subcategory_name -> subcategory_id
+    if "subcategory_name" in data and data.get("subcategory_name"):
+        category_name = data.get("category")
+        if category_name:
+            if subtype == "expense":
+                subcategory_index = state.get("expense_subcategory_index", {})
+            elif subtype == "income":
+                subcategory_index = state.get("income_subcategory_index", {})
+            else:
+                subcategory_index = {}
+
+            normalized_subcategory_name, subcategory_id = _resolve_subcategory_id(
+                category_name=category_name,
+                subcategory_name=data["subcategory_name"],
+                subcategory_index=subcategory_index,
+            )
+            data["subcategory_name"] = normalized_subcategory_name
+            data["subcategory_id"] = subcategory_id
+        else:
+            data["subcategory_id"] = None
+
     # Build summary message
     parts = [f"${data['amount']:.2f}", data.get("description", "")]
     if data.get("account"):
         parts.append(f"({data['account']})")
     if data.get("category"):
         parts.append(f"[{data['category']}]")
+    if data.get("subcategory_name"):
+        parts.append(f"<{data['subcategory_name']}>")
 
     message = f"Registré: {' — '.join(parts)}"
 

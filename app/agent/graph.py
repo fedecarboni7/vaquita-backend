@@ -69,6 +69,10 @@ async def run_agent(
     history: list[dict] | None = None,
     expense_categories: list[str] | None = None,
     income_categories: list[str] | None = None,
+    expense_category_tree: list[dict] | None = None,
+    income_category_tree: list[dict] | None = None,
+    expense_subcategory_index: dict[str, dict[str, str]] | None = None,
+    income_subcategory_index: dict[str, dict[str, str]] | None = None,
     accounts: list[str] | None = None,
 ) -> dict:
     """Run the agent graph and return response_type, message, and data.
@@ -78,6 +82,10 @@ async def run_agent(
         history: Optional list of previous messages (dicts with role/content).
         expense_categories: Expense category names for the user.
         income_categories: Income category names for the user.
+        expense_category_tree: Hierarchical structure [{category, subcategories[]}] for expenses.
+        income_category_tree: Hierarchical structure [{category, subcategories[]}] for incomes.
+        expense_subcategory_index: Case-insensitive mapping category/subcategory -> subcategory_id.
+        income_subcategory_index: Case-insensitive mapping category/subcategory -> subcategory_id.
         accounts: Account names for the user.
     """
     messages = []
@@ -97,6 +105,10 @@ async def run_agent(
             "messages": messages,
             "expense_categories": expense_categories or [],
             "income_categories": income_categories or [],
+            "expense_category_tree": expense_category_tree or [],
+            "income_category_tree": income_category_tree or [],
+            "expense_subcategory_index": expense_subcategory_index or {},
+            "income_subcategory_index": income_subcategory_index or {},
             "accounts": accounts or [],
         }
     )
