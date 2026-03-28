@@ -108,11 +108,15 @@ async def create_expense(
 ) -> TransactionResponse:
     if body.subcategory_id:
         subcategory = await _get_subcategory(session, current_user, body.subcategory_id)
-        if body.category and subcategory.category.name != body.category:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="subcategory_id does not belong to category",
-            )
+        if body.category:
+            if subcategory.category.name != body.category:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="subcategory_id does not belong to category",
+                )
+        else:
+            # Derive category from the subcategory when not explicitly provided
+            body.category = subcategory.category.name
 
     transaction = Transaction(
         id=uuid.uuid4(),
