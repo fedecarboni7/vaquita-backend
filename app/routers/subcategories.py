@@ -55,11 +55,7 @@ async def delete_subcategory(
     session: AsyncSession = Depends(get_session),
 ) -> None:
     subcategory = await session.get(Subcategory, subcategory_id)
-    if (
-        not subcategory
-        or subcategory.user_id != current_user.id
-        or subcategory.category_id != category_id
-    ):
+    if not subcategory or subcategory.user_id != current_user.id or subcategory.category_id != category_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Subcategory not found")
 
     await session.delete(subcategory)
