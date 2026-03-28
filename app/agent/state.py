@@ -12,4 +12,8 @@ class AgentState(MessagesState):
     response_payload: dict[str, Any] | None = None
     expense_categories: list[str] = []
     income_categories: list[str] = []
+    expense_category_tree: list[dict[str, Any]] = []
+    income_category_tree: list[dict[str, Any]] = []
+    expense_subcategory_index: dict[str, dict[str, str]] = {}
+    income_subcategory_index: dict[str, dict[str, str]] = {}
     accounts: list[str] = []

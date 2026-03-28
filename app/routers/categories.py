@@ -3,22 +3,28 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_user
 from app.database import get_session
 from app.models.category import Category
 from app.models.user import User
-from app.schemas.categories import CategoryCreate, CategoryResponse
+from app.schemas.categories import CategoryCreate, CategoryResponse, CategoryWithSubcategoriesResponse
 
 router = APIRouter(prefix="/categories", tags=["categories"])
 
 
-@router.get("", response_model=list[CategoryResponse])
+@router.get("", response_model=list[CategoryWithSubcategoriesResponse])
 async def list_categories(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
-) -> list[CategoryResponse]:
-    result = await session.execute(select(Category).where(Category.user_id == current_user.id).order_by(Category.name))
+) -> list[CategoryWithSubcategoriesResponse]:
+    result = await session.execute(
+        select(Category)
+        .options(selectinload(Category.subcategories))
+        .where(Category.user_id == current_user.id)
+        .order_by(Category.name)
+    )
     return result.scalars().all()
 
 

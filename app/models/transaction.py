@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.subcategory import Subcategory
     from app.models.user import User
 
 
@@ -55,9 +56,10 @@ class Transaction(Base):
         String(100),
         nullable=True,
     )
-    subcategory: Mapped[str | None] = mapped_column(
-        String(100),
+    subcategory_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("subcategories.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     description: Mapped[str] = mapped_column(
         String(255),
@@ -90,5 +92,12 @@ class Transaction(Base):
         onupdate=func.now(),
         nullable=False,
     )
+    subcategory: Mapped["Subcategory | None"] = relationship(back_populates="transactions")
+
+    @property
+    def subcategory_name(self) -> str | None:
+        if self.subcategory is None:
+            return None
+        return self.subcategory.name
 
     __table_args__ = (Index("ix_transactions_user_id_expense_date", "user_id", "expense_date"),)
