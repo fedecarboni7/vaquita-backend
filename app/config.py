@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_MINUTES: int = 1440  # 24 hours
+    DEV_AUTH_MODE: bool = False
     FRONTEND_URL: str = "http://localhost:5173"
     GOOGLE_API_KEY: str = ""
     LANGSMITH_API_KEY: str = ""
