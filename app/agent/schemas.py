@@ -1,6 +1,17 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+CurrencyCode = Literal["ARS", "USD", "EUR"]
+
+
+class CurrencyNormalizedModel(BaseModel):
+    @field_validator("currency", mode="before", check_fields=False)
+    @classmethod
+    def normalize_currency(cls, value: str) -> str:
+        if isinstance(value, str):
+            return value.upper()
+        return value
 
 
 class ClassifierOutput(BaseModel):
@@ -11,34 +22,34 @@ class ClassifierOutput(BaseModel):
     direct_answer_message: str | None = None
 
 
-class ExpenseExtractorOutput(BaseModel):
+class ExpenseExtractorOutput(CurrencyNormalizedModel):
     amount: float
     description: str
     account: str
     category: str | None = None
     subcategory_name: str | None = None
     expense_date: str | None = None
-    currency: str = "ARS"
+    currency: CurrencyCode = "ARS"
     installments: int | None = None
     note: str | None = None
 
 
-class IncomeExtractorOutput(BaseModel):
+class IncomeExtractorOutput(CurrencyNormalizedModel):
     amount: float
     description: str
     account: str
     category: str | None = None
     subcategory_name: str | None = None
     expense_date: str | None = None
-    currency: str = "ARS"
+    currency: CurrencyCode = "ARS"
     note: str | None = None
 
 
-class TransferExtractorOutput(BaseModel):
+class TransferExtractorOutput(CurrencyNormalizedModel):
     amount: float
     description: str
     account: str
     account_destination: str
     expense_date: str | None = None
-    currency: str = "ARS"
+    currency: CurrencyCode = "ARS"
     note: str | None = None

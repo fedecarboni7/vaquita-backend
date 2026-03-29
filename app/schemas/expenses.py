@@ -2,7 +2,9 @@ import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
+
+CurrencyCode = Literal["ARS", "USD", "EUR"]
 
 
 class TransactionCreate(BaseModel):
@@ -13,10 +15,17 @@ class TransactionCreate(BaseModel):
     expense_date: date
     category: str | None = None
     subcategory_id: uuid.UUID | None = None
-    currency: str = "ARS"
+    currency: CurrencyCode = "ARS"
     note: str | None = None
     installments: int | None = None
     account_destination: str | None = None
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def normalize_currency(cls, value: str) -> str:
+        if isinstance(value, str):
+            return value.upper()
+        return value
 
 
 class TransactionUpdate(BaseModel):
@@ -27,10 +36,17 @@ class TransactionUpdate(BaseModel):
     expense_date: date | None = None
     category: str | None = None
     subcategory_id: uuid.UUID | None = None
-    currency: str | None = None
+    currency: CurrencyCode | None = None
     note: str | None = None
     installments: int | None = None
     account_destination: str | None = None
+
+    @field_validator("currency", mode="before")
+    @classmethod
+    def normalize_currency(cls, value: str | None) -> str | None:
+        if isinstance(value, str):
+            return value.upper()
+        return value
 
 
 class PaginatedTransactionsResponse(BaseModel):
@@ -51,7 +67,7 @@ class TransactionResponse(BaseModel):
     category: str | None = None
     subcategory_id: uuid.UUID | None = None
     subcategory_name: str | None = None
-    currency: str
+    currency: CurrencyCode
     note: str | None = None
     installments: int | None = None
     account_destination: str | None = None
