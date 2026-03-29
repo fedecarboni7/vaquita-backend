@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_user
 from app.database import get_session
+from app.models.account import Account
 from app.models.subcategory import Subcategory
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
@@ -19,6 +20,32 @@ from app.schemas.expenses import (
 )
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
+
+
+async def _validate_account_currency_match(
+    session: AsyncSession,
+    current_user: User,
+    account_name: str,
+    currency: str,
+) -> None:
+    result = await session.execute(
+        select(Account.currency).where(
+            Account.user_id == current_user.id,
+            Account.name == account_name,
+        )
+    )
+    account_currency = result.scalar_one_or_none()
+    if account_currency is None:
+        return
+
+    if account_currency != currency:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                f"La cuenta '{account_name}' opera en {account_currency}. "
+                f"No se puede registrar una transacción en {currency}."
+            ),
+        )
 
 
 async def _get_subcategory(
@@ -118,6 +145,10 @@ async def create_expense(
             # Derive category from the subcategory when not explicitly provided
             body.category = subcategory.category.name
 
+    await _validate_account_currency_match(session, current_user, body.account, body.currency)
+    if body.type == "transfer" and body.account_destination:
+        await _validate_account_currency_match(session, current_user, body.account_destination, body.currency)
+
     transaction = Transaction(
         id=uuid.uuid4(),
         user_id=current_user.id,
@@ -150,6 +181,15 @@ async def update_expense(
     update_data = body.model_dump(exclude_unset=True)
     if "type" in update_data:
         update_data["type"] = TransactionType(update_data["type"])
+
+    resolved_currency = update_data.get("currency", transaction.currency)
+    resolved_account = update_data.get("account", transaction.account)
+    resolved_type = update_data.get("type", transaction.type)
+    resolved_destination = update_data.get("account_destination", transaction.account_destination)
+
+    await _validate_account_currency_match(session, current_user, resolved_account, resolved_currency)
+    if resolved_type == TransactionType.transfer and resolved_destination:
+        await _validate_account_currency_match(session, current_user, resolved_destination, resolved_currency)
 
     if "subcategory_id" in update_data:
         new_subcategory_id = update_data["subcategory_id"]
