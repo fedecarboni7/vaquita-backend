@@ -1,4 +1,5 @@
 from datetime import date
+from math import floor
 
 from langchain_core.messages import AIMessage, SystemMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -193,6 +194,12 @@ def validate(state: AgentState) -> dict:
             data["subcategory_id"] = subcategory_id
         else:
             data["subcategory_id"] = None
+
+    # If installments are present, include the per-installment base amount.
+    installments = data.get("installments")
+    if isinstance(installments, int) and installments > 0:
+        per_installment = data["amount"] / installments
+        data["installment_amount"] = floor(per_installment * 100) / 100
 
     # Build summary message
     parts = [f"${data['amount']:.2f}", data.get("description", "")]

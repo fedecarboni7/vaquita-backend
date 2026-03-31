@@ -1,5 +1,7 @@
 import uuid
+from calendar import monthrange
 from datetime import date
+from decimal import Decimal, ROUND_FLOOR
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
@@ -20,6 +22,59 @@ from app.schemas.expenses import (
 )
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
+MONEY_SCALE = Decimal("0.01")
+
+
+def _add_months(base_date: date, months: int) -> date:
+    month_index = (base_date.month - 1) + months
+    target_year = base_date.year + (month_index // 12)
+    target_month = (month_index % 12) + 1
+    target_day = min(base_date.day, monthrange(target_year, target_month)[1])
+    return date(target_year, target_month, target_day)
+
+
+def _build_installment_description(
+    base_description: str,
+    total_amount: Decimal,
+    installment_number: int,
+    installments: int,
+) -> str:
+    return (
+        f"{base_description} "
+        f"(Total: ${total_amount:.2f} - Cuota {installment_number}/{installments})"
+    )
+
+
+def _build_transaction(
+    *,
+    user_id: uuid.UUID,
+    amount: Decimal,
+    currency: str,
+    transaction_type: TransactionType,
+    account: str,
+    category: str | None,
+    subcategory_id: uuid.UUID | None,
+    description: str,
+    note: str | None,
+    installments: int | None,
+    account_destination: str | None,
+    expense_date: date,
+) -> Transaction:
+    return Transaction(
+        id=uuid.uuid4(),
+        user_id=user_id,
+        amount=amount,
+        currency=currency,
+        type=transaction_type,
+        account=account,
+        category=category,
+        subcategory_id=subcategory_id,
+        description=description,
+        note=note,
+        installments=installments,
+        account_destination=account_destination,
+        expense_date=expense_date,
+    )
 
 
 async def _validate_account_currency_match(
@@ -149,24 +204,71 @@ async def create_expense(
     if body.type == "transfer" and body.account_destination:
         await _validate_account_currency_match(session, current_user, body.account_destination, body.currency)
 
-    transaction = Transaction(
-        id=uuid.uuid4(),
-        user_id=current_user.id,
-        amount=body.amount,
-        currency=body.currency,
-        type=TransactionType(body.type),
-        account=body.account,
-        category=body.category,
-        subcategory_id=body.subcategory_id,
-        description=body.description,
-        note=body.note,
-        installments=body.installments,
-        account_destination=body.account_destination,
-        expense_date=body.expense_date,
-    )
-    session.add(transaction)
+    transaction_type = TransactionType(body.type)
+    total_amount = Decimal(str(body.amount)).quantize(MONEY_SCALE)
+
+    if body.installments is not None:
+        installments = body.installments
+        if installments <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="installments must be greater than 0",
+            )
+
+        installment_amount = (total_amount / installments).quantize(MONEY_SCALE, rounding=ROUND_FLOOR)
+        residual = (total_amount - (installment_amount * installments)).quantize(MONEY_SCALE)
+
+        transactions: list[Transaction] = []
+        for index in range(installments):
+            installment_number = index + 1
+            current_amount = installment_amount
+            if installment_number == installments:
+                current_amount += residual
+
+            transactions.append(
+                _build_transaction(
+                    user_id=current_user.id,
+                    amount=current_amount,
+                    currency=body.currency,
+                    transaction_type=transaction_type,
+                    account=body.account,
+                    category=body.category,
+                    subcategory_id=body.subcategory_id,
+                    description=_build_installment_description(
+                        base_description=body.description,
+                        total_amount=total_amount,
+                        installment_number=installment_number,
+                        installments=installments,
+                    ),
+                    note=body.note,
+                    installments=installments,
+                    account_destination=body.account_destination,
+                    expense_date=_add_months(body.expense_date, index),
+                )
+            )
+
+        session.add_all(transactions)
+        created_transaction_id = transactions[0].id
+    else:
+        transaction = _build_transaction(
+            user_id=current_user.id,
+            amount=total_amount,
+            currency=body.currency,
+            transaction_type=transaction_type,
+            account=body.account,
+            category=body.category,
+            subcategory_id=body.subcategory_id,
+            description=body.description,
+            note=body.note,
+            installments=body.installments,
+            account_destination=body.account_destination,
+            expense_date=body.expense_date,
+        )
+        session.add(transaction)
+        created_transaction_id = transaction.id
+
     await session.commit()
-    return await _get_transaction_for_user(session, current_user, transaction.id)
+    return await _get_transaction_for_user(session, current_user, created_transaction_id)
 
 
 @router.put("/{transaction_id}", response_model=TransactionResponse)
