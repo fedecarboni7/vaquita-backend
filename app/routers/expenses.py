@@ -39,10 +39,7 @@ def _build_installment_description(
     installment_number: int,
     installments: int,
 ) -> str:
-    return (
-        f"{base_description} "
-        f"(Total: ${total_amount:.2f} - Cuota {installment_number}/{installments})"
-    )
+    return f"{base_description} (Total: ${total_amount:.2f} - Cuota {installment_number}/{installments})"
 
 
 def _build_transaction(
