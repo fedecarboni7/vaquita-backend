@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.category import Category
     from app.models.subcategory import Subcategory
     from app.models.user import User
 
@@ -48,22 +49,23 @@ class Transaction(Base):
         Enum(TransactionType, name="transaction_type"),
         nullable=False,
     )
-    account: Mapped[str] = mapped_column(
-        String(100),
-        nullable=False,
-    )
-    category: Mapped[str | None] = mapped_column(
+    account: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
+    )
+    category_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("categories.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     subcategory_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("subcategories.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
-    description: Mapped[str] = mapped_column(
+    description: Mapped[str | None] = mapped_column(
         String(255),
-        nullable=False,
+        nullable=True,
     )
     note: Mapped[str | None] = mapped_column(
         Text,
@@ -92,7 +94,14 @@ class Transaction(Base):
         onupdate=func.now(),
         nullable=False,
     )
+    category: Mapped["Category | None"] = relationship()
     subcategory: Mapped["Subcategory | None"] = relationship(back_populates="transactions")
+
+    @property
+    def category_name(self) -> str | None:
+        if self.category is None:
+            return None
+        return self.category.name
 
     @property
     def subcategory_name(self) -> str | None:

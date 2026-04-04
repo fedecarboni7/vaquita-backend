@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.auth import get_current_user
 from app.database import get_session
 from app.models.account import Account
+from app.models.category import Category
 from app.models.subcategory import Subcategory
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
@@ -49,7 +50,7 @@ def _build_transaction(
     currency: str,
     transaction_type: TransactionType,
     account: str,
-    category: str | None,
+    category_id: uuid.UUID | None,
     subcategory_id: uuid.UUID | None,
     description: str,
     note: str | None,
@@ -64,7 +65,7 @@ def _build_transaction(
         currency=currency,
         type=transaction_type,
         account=account,
-        category=category,
+        category_id=category_id,
         subcategory_id=subcategory_id,
         description=description,
         note=note,
@@ -116,6 +117,20 @@ async def _get_subcategory(
     return subcategory
 
 
+async def _get_category(
+    session: AsyncSession,
+    current_user: User,
+    category_id: uuid.UUID,
+) -> Category:
+    result = await session.execute(
+        select(Category).where(Category.id == category_id, Category.user_id == current_user.id)
+    )
+    category = result.scalar_one_or_none()
+    if not category:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid category_id")
+    return category
+
+
 async def _get_transaction_for_user(
     session: AsyncSession,
     current_user: User,
@@ -123,7 +138,7 @@ async def _get_transaction_for_user(
 ) -> Transaction:
     result = await session.execute(
         select(Transaction)
-        .options(selectinload(Transaction.subcategory))
+        .options(selectinload(Transaction.subcategory), selectinload(Transaction.category))
         .where(Transaction.id == transaction_id, Transaction.user_id == current_user.id)
     )
     transaction = result.scalar_one_or_none()
@@ -152,7 +167,7 @@ async def list_expenses(
     if date_to:
         base_query = base_query.where(Transaction.expense_date <= date_to)
     if category:
-        base_query = base_query.where(Transaction.category == category)
+        base_query = base_query.where(Transaction.category.has(Category.name == category))
     if subcategory_id:
         base_query = base_query.where(Transaction.subcategory_id == subcategory_id)
     if account:
@@ -164,7 +179,7 @@ async def list_expenses(
     total = count_result.scalar_one()
 
     items_query = (
-        base_query.options(selectinload(Transaction.subcategory))
+        base_query.options(selectinload(Transaction.subcategory), selectinload(Transaction.category))
         .order_by(Transaction.expense_date.desc())
         .limit(limit)
         .offset(offset)
@@ -187,15 +202,17 @@ async def create_expense(
 ) -> TransactionResponse:
     if body.subcategory_id:
         subcategory = await _get_subcategory(session, current_user, body.subcategory_id)
-        if body.category:
-            if subcategory.category.name != body.category:
+        if body.category_id:
+            if subcategory.category_id != body.category_id:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail="subcategory_id does not belong to category",
                 )
         else:
             # Derive category from the subcategory when not explicitly provided
-            body.category = subcategory.category.name
+            body.category_id = subcategory.category_id
+    elif body.category_id:
+        await _get_category(session, current_user, body.category_id)
 
     await _validate_account_currency_match(session, current_user, body.account, body.currency)
     if body.type == "transfer" and body.account_destination:
@@ -229,7 +246,7 @@ async def create_expense(
                     currency=body.currency,
                     transaction_type=transaction_type,
                     account=body.account,
-                    category=body.category,
+                    category_id=body.category_id,
                     subcategory_id=body.subcategory_id,
                     description=_build_installment_description(
                         base_description=body.description,
@@ -253,7 +270,7 @@ async def create_expense(
             currency=body.currency,
             transaction_type=transaction_type,
             account=body.account,
-            category=body.category,
+            category_id=body.category_id,
             subcategory_id=body.subcategory_id,
             description=body.description,
             note=body.note,
@@ -290,20 +307,23 @@ async def update_expense(
     if resolved_type == TransactionType.transfer and resolved_destination:
         await _validate_account_currency_match(session, current_user, resolved_destination, resolved_currency)
 
+    if "category_id" in update_data and update_data["category_id"] is not None:
+        await _get_category(session, current_user, update_data["category_id"])
+
     if "subcategory_id" in update_data:
         new_subcategory_id = update_data["subcategory_id"]
         if new_subcategory_id is not None:
             subcategory = await _get_subcategory(session, current_user, new_subcategory_id)
-            category_name = update_data.get("category", transaction.category)
-            if category_name and subcategory.category.name != category_name:
+            category_id = update_data.get("category_id", transaction.category_id)
+            if category_id and subcategory.category_id != category_id:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail="subcategory_id does not belong to category",
                 )
-    elif "category" in update_data and transaction.subcategory_id is not None:
+    elif "category_id" in update_data and transaction.subcategory_id is not None:
         subcategory = await _get_subcategory(session, current_user, transaction.subcategory_id)
-        new_category_name = update_data.get("category")
-        if new_category_name and subcategory.category.name != new_category_name:
+        new_category_id = update_data.get("category_id")
+        if new_category_id and subcategory.category_id != new_category_id:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Current subcategory_id does not belong to category",
