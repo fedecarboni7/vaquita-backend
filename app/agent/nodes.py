@@ -145,6 +145,13 @@ def _resolve_subcategory_id(
     return subcategory_name, None
 
 
+def _resolve_category_id(category_name: str, category_index: dict[str, str]) -> tuple[str, str | None]:
+    for indexed_category_name, category_id in category_index.items():
+        if indexed_category_name.lower() == category_name.lower():
+            return indexed_category_name, category_id
+    return category_name, None
+
+
 def validate(state: AgentState) -> dict:
     """Validate extracted fields against user's real accounts and categories."""
     data = dict(state["extractor_output"])
@@ -166,17 +173,28 @@ def validate(state: AgentState) -> dict:
     if "category" in data:
         if subtype == "expense":
             categories = state.get("expense_categories", [])
+            category_index = state.get("expense_category_index", {})
         elif subtype == "income":
             categories = state.get("income_categories", [])
+            category_index = state.get("income_category_index", {})
         else:
             categories = []
+            category_index = {}
 
         if categories:
             data["category"] = _fuzzy_match(data["category"], categories)
 
+        if data.get("category"):
+            normalized_category_name, category_id = _resolve_category_id(data["category"], category_index)
+            data["category_name"] = normalized_category_name
+            data["category_id"] = category_id
+        else:
+            data["category_name"] = None
+            data["category_id"] = None
+
     # Resolve subcategory_name -> subcategory_id
     if "subcategory_name" in data and data.get("subcategory_name"):
-        category_name = data.get("category")
+        category_name = data.get("category_name") or data.get("category")
         if category_name:
             if subtype == "expense":
                 subcategory_index = state.get("expense_subcategory_index", {})
@@ -205,8 +223,8 @@ def validate(state: AgentState) -> dict:
     parts = [f"${data['amount']:.2f}", data.get("description", "")]
     if data.get("account"):
         parts.append(f"({data['account']})")
-    if data.get("category"):
-        parts.append(f"[{data['category']}]")
+    if data.get("category_name"):
+        parts.append(f"[{data['category_name']}]")
     if data.get("subcategory_name"):
         parts.append(f"<{data['subcategory_name']}>")
 

@@ -13,7 +13,7 @@ class TransactionCreate(BaseModel):
     type: Literal["expense", "income", "transfer"]
     account: str
     expense_date: date
-    category: str | None = None
+    category_id: uuid.UUID | None = None
     subcategory_id: uuid.UUID | None = None
     currency: CurrencyCode = "ARS"
     note: str | None = None
@@ -34,7 +34,7 @@ class TransactionUpdate(BaseModel):
     type: Literal["expense", "income", "transfer"] | None = None
     account: str | None = None
     expense_date: date | None = None
-    category: str | None = None
+    category_id: uuid.UUID | None = None
     subcategory_id: uuid.UUID | None = None
     currency: CurrencyCode | None = None
     note: str | None = None
@@ -60,11 +60,12 @@ class TransactionResponse(BaseModel):
 
     id: uuid.UUID
     amount: float
-    description: str
+    description: str | None
     type: str
-    account: str
+    account: str | None
     expense_date: date
-    category: str | None = None
+    category_id: uuid.UUID | None = None
+    category_name: str | None = None
     subcategory_id: uuid.UUID | None = None
     subcategory_name: str | None = None
     currency: CurrencyCode
