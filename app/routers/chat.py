@@ -32,10 +32,12 @@ async def chat(
     expense_category_rows = cat_expense_result.scalars().all()
     expense_categories = [category.name for category in expense_category_rows]
     expense_category_tree: list[dict] = []
+    expense_category_index: dict[str, str] = {}
     expense_subcategory_index: dict[str, dict[str, str]] = {}
     for category in expense_category_rows:
         subcategories = [subcategory.name for subcategory in category.subcategories]
         expense_category_tree.append({"category": category.name, "subcategories": subcategories})
+        expense_category_index[category.name] = str(category.id)
         expense_subcategory_index[category.name] = {
             subcategory.name: str(subcategory.id) for subcategory in category.subcategories
         }
@@ -48,10 +50,12 @@ async def chat(
     income_category_rows = cat_income_result.scalars().all()
     income_categories = [category.name for category in income_category_rows]
     income_category_tree: list[dict] = []
+    income_category_index: dict[str, str] = {}
     income_subcategory_index: dict[str, dict[str, str]] = {}
     for category in income_category_rows:
         subcategories = [subcategory.name for subcategory in category.subcategories]
         income_category_tree.append({"category": category.name, "subcategories": subcategories})
+        income_category_index[category.name] = str(category.id)
         income_subcategory_index[category.name] = {
             subcategory.name: str(subcategory.id) for subcategory in category.subcategories
         }
@@ -66,6 +70,8 @@ async def chat(
         income_categories=income_categories,
         expense_category_tree=expense_category_tree,
         income_category_tree=income_category_tree,
+        expense_category_index=expense_category_index,
+        income_category_index=income_category_index,
         expense_subcategory_index=expense_subcategory_index,
         income_subcategory_index=income_subcategory_index,
         accounts=accounts,
