@@ -8,8 +8,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from app.config import settings
 
 TRANSCRIPTION_PROMPT = (
-    "Transcribí este audio exactamente como fue dicho, en español. "
-    "Devolvé solo el texto, sin comentarios adicionales."
+    "Transcribí este audio exactamente como fue dicho, en español. Devolvé solo el texto, sin comentarios adicionales."
 )
 
 
