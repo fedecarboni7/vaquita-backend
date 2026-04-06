@@ -16,3 +16,4 @@ class ChatResponse(BaseModel):
     response_type: str
     message: str
     data: dict[str, Any] | None = None
+    transcribed_text: str | None = None
