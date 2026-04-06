@@ -204,7 +204,7 @@ async def chat_audio(
     except RuntimeError as exc:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="La transcripcion de audio no esta configurada",
+            detail="La transcripción de audio no esta configurada",
         ) from exc
     except Exception as exc:
         raise HTTPException(
