@@ -26,3 +26,20 @@ def test_validate_adds_installment_amount_when_installments_present() -> None:
 def test_add_months_clamps_to_last_day_when_needed() -> None:
     assert _add_months(date(2026, 1, 31), 1) == date(2026, 2, 28)
     assert _add_months(date(2026, 1, 31), 2) == date(2026, 3, 31)
+
+
+def test_validate_formats_message_amount_with_argentina_separators() -> None:
+    state = {
+        "extractor_output": {
+            "amount": 1234567.89,
+            "description": "Venta freelance",
+            "account": "Banco",
+        },
+        "classifier_output": ClassifierOutput(intent="register", subtype="income"),
+        "accounts": ["Banco"],
+    }
+
+    result = validate(state)
+    assistant_message = result["messages"][0].content
+
+    assert "$1.234.567,89" in assistant_message
