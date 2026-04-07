@@ -152,6 +152,12 @@ def _resolve_category_id(category_name: str, category_index: dict[str, str]) -> 
     return category_name, None
 
 
+def _format_amount_es_ar(amount: float) -> str:
+    # Convert 1,234,567.89 -> 1.234.567,89
+    formatted = f"{amount:,.2f}"
+    return formatted.replace(",", "#").replace(".", ",").replace("#", ".")
+
+
 def validate(state: AgentState) -> dict:
     """Validate extracted fields against user's real accounts and categories."""
     data = dict(state["extractor_output"])
@@ -220,7 +226,7 @@ def validate(state: AgentState) -> dict:
         data["installment_amount"] = floor(per_installment * 100) / 100
 
     # Build summary message
-    parts = [f"${data['amount']:.2f}", data.get("description", "")]
+    parts = [f"${_format_amount_es_ar(data['amount'])}", data.get("description", "")]
     if data.get("account"):
         parts.append(f"({data['account']})")
     if data.get("category_name"):
