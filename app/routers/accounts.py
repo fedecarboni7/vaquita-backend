@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -73,58 +73,58 @@ async def _calculate_balances_by_account(
     user_id: uuid.UUID,
     accounts: list[Account],
     today: date,
-) -> tuple[dict[str, float], dict[str, float | None]]:
+) -> tuple[dict[uuid.UUID, float], dict[uuid.UUID, float | None]]:
     del today
-    windows_by_account_name: dict[str, tuple[date, date] | None] = {
-        account.name: _build_credit_card_windows(account) for account in accounts
+    windows_by_account_id: dict[uuid.UUID, tuple[date, date] | None] = {
+        account.id: _build_credit_card_windows(account) for account in accounts
     }
 
     result = await session.execute(
         select(
-            Transaction.account,
-            Transaction.account_destination,
+            Transaction.account_id,
+            Transaction.account_destination_id,
             Transaction.type,
             Transaction.amount,
             Transaction.expense_date,
         ).where(Transaction.user_id == user_id)
     )
 
-    balances: defaultdict[str, Decimal] = defaultdict(lambda: Decimal("0"))
-    closed_period_balances: dict[str, Decimal | None] = {}
+    balances: defaultdict[uuid.UUID, Decimal] = defaultdict(lambda: Decimal("0"))
+    closed_period_balances: dict[uuid.UUID, Decimal | None] = {}
 
     for account in accounts:
-        windows = windows_by_account_name.get(account.name)
+        windows = windows_by_account_id.get(account.id)
         if windows is None:
-            closed_period_balances[account.name] = None
+            closed_period_balances[account.id] = None
         else:
-            closed_period_balances[account.name] = Decimal("0")
+            closed_period_balances[account.id] = Decimal("0")
 
-    def apply_delta(account_name: str | None, delta: Decimal, expense_date: date) -> None:
-        if not account_name:
+    def apply_delta(account_id: uuid.UUID | None, delta: Decimal, expense_date: date) -> None:
+        if account_id is None:
             return
 
-        balances[account_name] += delta
+        balances[account_id] += delta
 
-        windows = windows_by_account_name.get(account_name)
+        windows = windows_by_account_id.get(account_id)
         if windows is None:
             return
 
         closed_period_start, closed_period_end = windows
         if closed_period_start <= expense_date <= closed_period_end:
-            closed_balance = closed_period_balances.get(account_name)
+            closed_balance = closed_period_balances.get(account_id)
             if closed_balance is not None:
-                closed_period_balances[account_name] = closed_balance + delta
+                closed_period_balances[account_id] = closed_balance + delta
 
-    for account_name, account_destination, transaction_type, amount, expense_date in result.all():
+    for account_id, account_destination_id, transaction_type, amount, expense_date in result.all():
         amount_decimal = Decimal(str(amount))
 
         if transaction_type == TransactionType.income:
-            apply_delta(account_name, amount_decimal, expense_date)
+            apply_delta(account_id, amount_decimal, expense_date)
         elif transaction_type == TransactionType.expense:
-            apply_delta(account_name, -amount_decimal, expense_date)
+            apply_delta(account_id, -amount_decimal, expense_date)
         elif transaction_type == TransactionType.transfer:
-            apply_delta(account_name, -amount_decimal, expense_date)
-            apply_delta(account_destination, amount_decimal, expense_date)
+            apply_delta(account_id, -amount_decimal, expense_date)
+            apply_delta(account_destination_id, amount_decimal, expense_date)
 
     total_balances = {name: float(balance) for name, balance in balances.items()}
     closed_balances = {
@@ -151,8 +151,8 @@ async def list_accounts(
     return [
         _build_account_response(
             account,
-            balances_by_account.get(account.name, 0.0),
-            closed_period_balances.get(account.name),
+            balances_by_account.get(account.id, 0.0),
+            closed_period_balances.get(account.id),
         )
         for account in accounts
     ]
@@ -177,8 +177,8 @@ async def get_account(
     )
     return _build_account_response(
         account,
-        balances_by_account.get(account.name, 0.0),
-        closed_period_balances.get(account.name),
+        balances_by_account.get(account.id, 0.0),
+        closed_period_balances.get(account.id),
     )
 
 
@@ -214,8 +214,8 @@ async def create_account(
     )
     return _build_account_response(
         account,
-        balances_by_account.get(account.name, 0.0),
-        closed_period_balances.get(account.name),
+        balances_by_account.get(account.id, 0.0),
+        closed_period_balances.get(account.id),
     )
 
 
@@ -245,8 +245,6 @@ async def update_account(
     if not account or account.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
 
-    previous_name = account.name
-
     account.name = body.name
     account.account_type = body.account_type
     account.currency = body.currency
@@ -260,24 +258,6 @@ async def update_account(
     if "payment_due_date" in fields_set:
         account.payment_due_date = body.payment_due_date
 
-    if previous_name != body.name:
-        await session.execute(
-            update(Transaction)
-            .where(
-                Transaction.user_id == current_user.id,
-                Transaction.account == previous_name,
-            )
-            .values(account=body.name)
-        )
-        await session.execute(
-            update(Transaction)
-            .where(
-                Transaction.user_id == current_user.id,
-                Transaction.account_destination == previous_name,
-            )
-            .values(account_destination=body.name)
-        )
-
     await session.commit()
     await session.refresh(account)
 
@@ -289,8 +269,8 @@ async def update_account(
     )
     return _build_account_response(
         account,
-        balances_by_account.get(account.name, 0.0),
-        closed_period_balances.get(account.name),
+        balances_by_account.get(account.id, 0.0),
+        closed_period_balances.get(account.id),
     )
 
 
@@ -312,7 +292,7 @@ async def adjust_account_balance(
         [account],
         today,
     )
-    calculated_balance = Decimal(str(balances_by_account.get(account.name, 0.0))).quantize(MONEY_SCALE)
+    calculated_balance = Decimal(str(balances_by_account.get(account.id, 0.0))).quantize(MONEY_SCALE)
     real_balance = Decimal(str(body.balance)).quantize(MONEY_SCALE)
     delta = (real_balance - calculated_balance).quantize(MONEY_SCALE)
 
@@ -328,13 +308,13 @@ async def adjust_account_balance(
         amount=adjustment_amount,
         currency=account.currency,
         type=transaction_type,
-        account=account.name,
+        account_id=account.id,
         category_id=None,
         subcategory_id=None,
         description="Ajuste de saldo",
         note=None,
         installments=None,
-        account_destination=None,
+        account_destination_id=None,
         expense_date=today,
     )
     session.add(transaction)

@@ -19,3 +19,4 @@ class AgentState(MessagesState):
     expense_subcategory_index: dict[str, dict[str, str]] = {}
     income_subcategory_index: dict[str, dict[str, str]] = {}
     accounts: list[str] = []
+    account_name_to_id: dict[str, str] = {}

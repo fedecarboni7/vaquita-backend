@@ -158,22 +158,112 @@ def _format_amount_es_ar(amount: float) -> str:
     return formatted.replace(",", "#").replace(".", ",").replace("#", ".")
 
 
+def _resolve_account_id(
+    account_name: str,
+    accounts: list[str],
+    account_name_to_id: dict[str, str],
+) -> tuple[str, str | None]:
+    normalized_name = _fuzzy_match(account_name, accounts) if accounts else account_name
+    return normalized_name, account_name_to_id.get(normalized_name.strip().lower())
+
+
+def _build_account_clarification_message(
+    *,
+    missing_fields: list[str],
+    invalid_account_values: dict[str, str],
+    accounts: list[str],
+) -> str:
+    issues: list[str] = []
+
+    if "account" in missing_fields:
+        issues.append("la cuenta de origen")
+    if "account_destination" in missing_fields:
+        issues.append("la cuenta destino")
+
+    invalid_origin = invalid_account_values.get("account")
+    if invalid_origin:
+        issues.append(f"la cuenta de origen '{invalid_origin}' no existe")
+
+    invalid_destination = invalid_account_values.get("account_destination")
+    if invalid_destination:
+        issues.append(f"la cuenta destino '{invalid_destination}' no existe")
+
+    if issues:
+        if len(issues) == 1:
+            message = f"Necesito que aclares {issues[0]}."
+        else:
+            message = f"Necesito que aclares {', '.join(issues[:-1])} y {issues[-1]}."
+    else:
+        message = "Necesito que aclares la cuenta para poder registrar la transacción."
+
+    if accounts:
+        return f"{message} Cuentas disponibles: {', '.join(accounts)}."
+
+    return f"{message} Primero creá una cuenta para poder registrar la transacción."
+
+
 def validate(state: AgentState) -> dict:
     """Validate extracted fields against user's real accounts and categories."""
     data = dict(state["extractor_output"])
     subtype = state["classifier_output"].subtype
     accounts = state.get("accounts", [])
+    account_name_to_id = state.get("account_name_to_id", {})
 
     # Add transaction type
     data["type"] = subtype
 
-    # Validate account
-    if "account" in data and accounts:
-        data["account"] = _fuzzy_match(data["account"], accounts)
+    missing_account_fields: list[str] = []
+    invalid_account_values: dict[str, str] = {}
 
-    # Validate account_destination for transfers
-    if "account_destination" in data and accounts:
-        data["account_destination"] = _fuzzy_match(data["account_destination"], accounts)
+    # Validate and resolve source account to account_id
+    account_name = data.get("account")
+    if isinstance(account_name, str) and account_name.strip():
+        normalized_account_name, account_id = _resolve_account_id(
+            account_name,
+            accounts,
+            account_name_to_id,
+        )
+        data["account"] = normalized_account_name
+        data["account_id"] = account_id
+        if account_id is None:
+            invalid_account_values["account"] = account_name
+    else:
+        missing_account_fields.append("account")
+        data["account_id"] = None
+
+    # Validate and resolve destination account for transfers
+    if subtype == "transfer":
+        destination_name = data.get("account_destination")
+        if isinstance(destination_name, str) and destination_name.strip():
+            normalized_destination_name, destination_account_id = _resolve_account_id(
+                destination_name,
+                accounts,
+                account_name_to_id,
+            )
+            data["account_destination"] = normalized_destination_name
+            data["account_destination_id"] = destination_account_id
+            if destination_account_id is None:
+                invalid_account_values["account_destination"] = destination_name
+        else:
+            missing_account_fields.append("account_destination")
+            data["account_destination_id"] = None
+    else:
+        data["account_destination_id"] = None
+
+    if missing_account_fields or invalid_account_values:
+        return {
+            "response_type": "clarification",
+            "response_payload": None,
+            "messages": [
+                AIMessage(
+                    content=_build_account_clarification_message(
+                        missing_fields=missing_account_fields,
+                        invalid_account_values=invalid_account_values,
+                        accounts=accounts,
+                    )
+                )
+            ],
+        }
 
     # Validate category
     if "category" in data:

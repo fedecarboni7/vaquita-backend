@@ -76,6 +76,7 @@ async def run_agent(
     expense_subcategory_index: dict[str, dict[str, str]] | None = None,
     income_subcategory_index: dict[str, dict[str, str]] | None = None,
     accounts: list[str] | None = None,
+    account_name_to_id: dict[str, str] | None = None,
 ) -> dict:
     """Run the agent graph and return response_type, message, and data.
 
@@ -89,6 +90,7 @@ async def run_agent(
         expense_subcategory_index: Case-insensitive mapping category/subcategory -> subcategory_id.
         income_subcategory_index: Case-insensitive mapping category/subcategory -> subcategory_id.
         accounts: Account names for the user.
+        account_name_to_id: Case-insensitive mapping account name -> account_id.
     """
     messages = []
     if history:
@@ -114,6 +116,7 @@ async def run_agent(
             "expense_subcategory_index": expense_subcategory_index or {},
             "income_subcategory_index": income_subcategory_index or {},
             "accounts": accounts or [],
+            "account_name_to_id": account_name_to_id or {},
         }
     )
 

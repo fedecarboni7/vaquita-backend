@@ -9,6 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.account import Account
     from app.models.category import Category
     from app.models.subcategory import Subcategory
     from app.models.user import User
@@ -49,9 +50,10 @@ class Transaction(Base):
         Enum(TransactionType, name="transaction_type"),
         nullable=False,
     )
-    account: Mapped[str | None] = mapped_column(
-        String(100),
+    account_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("accounts.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     category_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("categories.id", ondelete="SET NULL"),
@@ -74,9 +76,10 @@ class Transaction(Base):
     installments: Mapped[int | None] = mapped_column(
         nullable=True,
     )
-    account_destination: Mapped[str | None] = mapped_column(
-        String(100),
+    account_destination_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("accounts.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     expense_date: Mapped[date] = mapped_column(
         Date,
@@ -96,6 +99,20 @@ class Transaction(Base):
     )
     category: Mapped["Category | None"] = relationship()
     subcategory: Mapped["Subcategory | None"] = relationship(back_populates="transactions")
+    source_account: Mapped["Account | None"] = relationship(foreign_keys=[account_id])
+    destination_account: Mapped["Account | None"] = relationship(foreign_keys=[account_destination_id])
+
+    @property
+    def account(self) -> str | None:
+        if self.source_account is None:
+            return None
+        return self.source_account.name
+
+    @property
+    def account_destination(self) -> str | None:
+        if self.destination_account is None:
+            return None
+        return self.destination_account.name
 
     @property
     def category_name(self) -> str | None:
