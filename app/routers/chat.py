@@ -97,8 +97,20 @@ async def _build_chat_context(current_user: User, session: AsyncSession) -> dict
             subcategory.name: str(subcategory.id) for subcategory in category.subcategories
         }
 
-    acc_result = await session.execute(select(Account.name).where(Account.user_id == current_user.id))
-    accounts = [row[0] for row in acc_result.all()]
+    acc_result = await session.execute(
+        select(Account.id, Account.name)
+        .where(Account.user_id == current_user.id)
+        .order_by(Account.created_at.asc(), Account.id.asc())
+    )
+    account_rows = acc_result.all()
+    accounts: list[str] = []
+    account_name_to_id: dict[str, str] = {}
+    for account_id, account_name in account_rows:
+        normalized_name = account_name.strip().lower()
+        if normalized_name in account_name_to_id:
+            continue
+        accounts.append(account_name)
+        account_name_to_id[normalized_name] = str(account_id)
 
     return {
         "expense_categories": expense_categories,
@@ -110,6 +122,7 @@ async def _build_chat_context(current_user: User, session: AsyncSession) -> dict
         "expense_subcategory_index": expense_subcategory_index,
         "income_subcategory_index": income_subcategory_index,
         "accounts": accounts,
+        "account_name_to_id": account_name_to_id,
     }
 
 
@@ -133,6 +146,7 @@ async def _process_chat_message(
         expense_subcategory_index=context["expense_subcategory_index"],
         income_subcategory_index=context["income_subcategory_index"],
         accounts=context["accounts"],
+        account_name_to_id=context["account_name_to_id"],
     )
 
 

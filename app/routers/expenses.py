@@ -49,13 +49,13 @@ def _build_transaction(
     amount: Decimal,
     currency: str,
     transaction_type: TransactionType,
-    account: str,
+    account_id: uuid.UUID,
     category_id: uuid.UUID | None,
     subcategory_id: uuid.UUID | None,
     description: str,
     note: str | None,
     installments: int | None,
-    account_destination: str | None,
+    account_destination_id: uuid.UUID | None,
     expense_date: date,
 ) -> Transaction:
     return Transaction(
@@ -64,38 +64,46 @@ def _build_transaction(
         amount=amount,
         currency=currency,
         type=transaction_type,
-        account=account,
+        account_id=account_id,
         category_id=category_id,
         subcategory_id=subcategory_id,
         description=description,
         note=note,
         installments=installments,
-        account_destination=account_destination,
+        account_destination_id=account_destination_id,
         expense_date=expense_date,
     )
 
 
-async def _validate_account_currency_match(
+async def _get_account_for_user(
     session: AsyncSession,
     current_user: User,
-    account_name: str,
-    currency: str,
-) -> None:
+    account_id: uuid.UUID,
+) -> Account:
     result = await session.execute(
-        select(Account.currency).where(
+        select(Account).where(
+            Account.id == account_id,
             Account.user_id == current_user.id,
-            Account.name == account_name,
         )
     )
-    account_currency = result.scalar_one_or_none()
-    if account_currency is None:
-        return
+    account = result.scalar_one_or_none()
+    if account is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid account_id",
+        )
+    return account
 
-    if account_currency != currency:
+
+def _validate_account_currency_match(
+    account: Account,
+    currency: str,
+) -> None:
+    if account.currency != currency:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=(
-                f"La cuenta '{account_name}' opera en {account_currency}. "
+                f"La cuenta '{account.name}' opera en {account.currency}. "
                 f"No se puede registrar una transacción en {currency}."
             ),
         )
@@ -138,7 +146,12 @@ async def _get_transaction_for_user(
 ) -> Transaction:
     result = await session.execute(
         select(Transaction)
-        .options(selectinload(Transaction.subcategory), selectinload(Transaction.category))
+        .options(
+            selectinload(Transaction.subcategory),
+            selectinload(Transaction.category),
+            selectinload(Transaction.source_account),
+            selectinload(Transaction.destination_account),
+        )
         .where(Transaction.id == transaction_id, Transaction.user_id == current_user.id)
     )
     transaction = result.scalar_one_or_none()
@@ -154,6 +167,7 @@ async def list_expenses(
     category: str | None = Query(None),
     subcategory_id: uuid.UUID | None = Query(None),
     account: str | None = Query(None),
+    account_id: uuid.UUID | None = Query(None),
     type: str | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
@@ -171,7 +185,9 @@ async def list_expenses(
     if subcategory_id:
         base_query = base_query.where(Transaction.subcategory_id == subcategory_id)
     if account:
-        base_query = base_query.where(Transaction.account == account)
+        base_query = base_query.where(Transaction.source_account.has(Account.name == account))
+    if account_id:
+        base_query = base_query.where(Transaction.account_id == account_id)
     if type:
         base_query = base_query.where(Transaction.type == TransactionType(type))
 
@@ -179,7 +195,12 @@ async def list_expenses(
     total = count_result.scalar_one()
 
     items_query = (
-        base_query.options(selectinload(Transaction.subcategory), selectinload(Transaction.category))
+        base_query.options(
+            selectinload(Transaction.subcategory),
+            selectinload(Transaction.category),
+            selectinload(Transaction.source_account),
+            selectinload(Transaction.destination_account),
+        )
         .order_by(Transaction.expense_date.desc())
         .limit(limit)
         .offset(offset)
@@ -214,9 +235,23 @@ async def create_expense(
     elif body.category_id:
         await _get_category(session, current_user, body.category_id)
 
-    await _validate_account_currency_match(session, current_user, body.account, body.currency)
-    if body.type == "transfer" and body.account_destination:
-        await _validate_account_currency_match(session, current_user, body.account_destination, body.currency)
+    source_account = await _get_account_for_user(session, current_user, body.account_id)
+    _validate_account_currency_match(source_account, body.currency)
+
+    destination_account_id: uuid.UUID | None = None
+    if body.type == "transfer":
+        if body.account_destination_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="account_destination_id is required for transfer",
+            )
+        destination_account = await _get_account_for_user(
+            session,
+            current_user,
+            body.account_destination_id,
+        )
+        _validate_account_currency_match(destination_account, body.currency)
+        destination_account_id = destination_account.id
 
     transaction_type = TransactionType(body.type)
     total_amount = Decimal(str(body.amount)).quantize(MONEY_SCALE)
@@ -245,7 +280,7 @@ async def create_expense(
                     amount=current_amount,
                     currency=body.currency,
                     transaction_type=transaction_type,
-                    account=body.account,
+                    account_id=source_account.id,
                     category_id=body.category_id,
                     subcategory_id=body.subcategory_id,
                     description=_build_installment_description(
@@ -256,7 +291,7 @@ async def create_expense(
                     ),
                     note=body.note,
                     installments=installments,
-                    account_destination=body.account_destination,
+                    account_destination_id=destination_account_id,
                     expense_date=_add_months(body.expense_date, index),
                 )
             )
@@ -269,13 +304,13 @@ async def create_expense(
             amount=total_amount,
             currency=body.currency,
             transaction_type=transaction_type,
-            account=body.account,
+            account_id=source_account.id,
             category_id=body.category_id,
             subcategory_id=body.subcategory_id,
             description=body.description,
             note=body.note,
             installments=body.installments,
-            account_destination=body.account_destination,
+            account_destination_id=destination_account_id,
             expense_date=body.expense_date,
         )
         session.add(transaction)
@@ -299,13 +334,32 @@ async def update_expense(
         update_data["type"] = TransactionType(update_data["type"])
 
     resolved_currency = update_data.get("currency", transaction.currency)
-    resolved_account = update_data.get("account", transaction.account)
+    resolved_account_id = update_data.get("account_id", transaction.account_id)
     resolved_type = update_data.get("type", transaction.type)
-    resolved_destination = update_data.get("account_destination", transaction.account_destination)
+    resolved_destination_id = update_data.get(
+        "account_destination_id",
+        transaction.account_destination_id,
+    )
 
-    await _validate_account_currency_match(session, current_user, resolved_account, resolved_currency)
-    if resolved_type == TransactionType.transfer and resolved_destination:
-        await _validate_account_currency_match(session, current_user, resolved_destination, resolved_currency)
+    if resolved_account_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="account_id is required",
+        )
+
+    source_account = await _get_account_for_user(session, current_user, resolved_account_id)
+    _validate_account_currency_match(source_account, resolved_currency)
+
+    if resolved_type == TransactionType.transfer:
+        if resolved_destination_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="account_destination_id is required for transfer",
+            )
+        destination_account = await _get_account_for_user(session, current_user, resolved_destination_id)
+        _validate_account_currency_match(destination_account, resolved_currency)
+    else:
+        update_data["account_destination_id"] = None
 
     if "category_id" in update_data and update_data["category_id"] is not None:
         await _get_category(session, current_user, update_data["category_id"])
