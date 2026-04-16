@@ -330,6 +330,18 @@ async def update_expense(
     transaction = await _get_transaction_for_user(session, current_user, transaction_id)
 
     update_data = body.model_dump(exclude_unset=True)
+    if "amount" in update_data and update_data["amount"] is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="amount must be a number greater than 0",
+        )
+
+    if "amount" in update_data and update_data["amount"] <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="amount must be greater than 0",
+        )
+
     if "type" in update_data:
         update_data["type"] = TransactionType(update_data["type"])
 
