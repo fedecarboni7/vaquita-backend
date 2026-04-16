@@ -4,7 +4,7 @@ from datetime import date
 from decimal import Decimal, ROUND_FLOOR
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -178,36 +178,101 @@ async def _get_transaction_for_user(
     return transaction
 
 
+def _apply_list_expenses_filters(
+    base_query,
+    *,
+    date_from: date | None,
+    date_to: date | None,
+    category: str | None,
+    category_ids: list[uuid.UUID] | None,
+    subcategory_id: uuid.UUID | None,
+    subcategory_ids: list[uuid.UUID] | None,
+    account: str | None,
+    account_id: uuid.UUID | None,
+    account_ids: list[uuid.UUID] | None,
+    type: str | None,
+    types: list[TransactionType] | None,
+):
+    if date_from:
+        base_query = base_query.where(Transaction.expense_date >= date_from)
+    if date_to:
+        base_query = base_query.where(Transaction.expense_date <= date_to)
+
+    if category_ids:
+        base_query = base_query.where(Transaction.category_id.in_(category_ids))
+    elif category:
+        base_query = base_query.where(Transaction.category.has(Category.name == category))
+
+    if subcategory_ids:
+        base_query = base_query.where(Transaction.subcategory_id.in_(subcategory_ids))
+    elif subcategory_id:
+        base_query = base_query.where(Transaction.subcategory_id == subcategory_id)
+
+    account_ids_to_filter = account_ids if account_ids else ([account_id] if account_id else None)
+    if account_ids_to_filter:
+        # A transfer should match when the selected account is either source or destination.
+        base_query = base_query.where(
+            or_(
+                Transaction.account_id.in_(account_ids_to_filter),
+                Transaction.account_destination_id.in_(account_ids_to_filter),
+            )
+        )
+    elif account:
+        base_query = base_query.where(
+            or_(
+                Transaction.source_account.has(Account.name == account),
+                Transaction.destination_account.has(Account.name == account),
+            )
+        )
+
+    if types:
+        base_query = base_query.where(Transaction.type.in_(types))
+    elif type:
+        try:
+            legacy_type = TransactionType(type)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail=f"Invalid transaction type '{type}'",
+            ) from exc
+        base_query = base_query.where(Transaction.type == legacy_type)
+
+    return base_query
+
+
 @router.get("", response_model=PaginatedTransactionsResponse)
 async def list_expenses(
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
     category: str | None = Query(None),
+    category_ids: list[uuid.UUID] | None = Query(None),
     subcategory_id: uuid.UUID | None = Query(None),
+    subcategory_ids: list[uuid.UUID] | None = Query(None),
     account: str | None = Query(None),
     account_id: uuid.UUID | None = Query(None),
+    account_ids: list[uuid.UUID] | None = Query(None),
     type: str | None = Query(None),
+    types: list[TransactionType] | None = Query(None),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> PaginatedTransactionsResponse:
     base_query = select(Transaction).where(Transaction.user_id == current_user.id)
-
-    if date_from:
-        base_query = base_query.where(Transaction.expense_date >= date_from)
-    if date_to:
-        base_query = base_query.where(Transaction.expense_date <= date_to)
-    if category:
-        base_query = base_query.where(Transaction.category.has(Category.name == category))
-    if subcategory_id:
-        base_query = base_query.where(Transaction.subcategory_id == subcategory_id)
-    if account:
-        base_query = base_query.where(Transaction.source_account.has(Account.name == account))
-    if account_id:
-        base_query = base_query.where(Transaction.account_id == account_id)
-    if type:
-        base_query = base_query.where(Transaction.type == TransactionType(type))
+    base_query = _apply_list_expenses_filters(
+        base_query,
+        date_from=date_from,
+        date_to=date_to,
+        category=category,
+        category_ids=category_ids,
+        subcategory_id=subcategory_id,
+        subcategory_ids=subcategory_ids,
+        account=account,
+        account_id=account_id,
+        account_ids=account_ids,
+        type=type,
+        types=types,
+    )
 
     count_result = await session.execute(select(func.count()).select_from(base_query.subquery()))
     total = count_result.scalar_one()
