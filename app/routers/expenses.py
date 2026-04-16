@@ -256,6 +256,7 @@ async def create_expense(
     source_account = await _get_account_for_user(session, current_user, body.account_id)
     _validate_account_currency_match(source_account, body.currency)
 
+    destination_account: Account | None = None
     destination_account_id: uuid.UUID | None = None
     transfer_to_amount: Decimal | None = None
     if body.type == "transfer":
@@ -281,9 +282,8 @@ async def create_expense(
 
     if body.type == "transfer":
         transfer_to_amount = _normalize_transfer_to_amount(body.to_amount)
-        if transfer_to_amount is None:
+        if transfer_to_amount is None and destination_account is not None:
             # Keep previous same-currency behavior unless to_amount is explicitly provided.
-            destination_account = await _get_account_for_user(session, current_user, destination_account_id)
             _validate_account_currency_match(destination_account, body.currency)
 
     if body.installments is not None:
