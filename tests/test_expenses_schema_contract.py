@@ -22,6 +22,23 @@ def test_transaction_create_accepts_account_ids() -> None:
     assert transaction.account_id is not None
 
 
+def test_transaction_create_accepts_optional_transfer_conversion_fields() -> None:
+    payload = {
+        "amount": 100.0,
+        "to_amount": 120000.0,
+        "description": "Transferencia USD a ARS",
+        "type": "transfer",
+        "account_id": str(uuid4()),
+        "account_destination_id": str(uuid4()),
+        "expense_date": date(2026, 4, 16).isoformat(),
+        "currency": "USD",
+    }
+
+    transaction = TransactionCreate.model_validate(payload)
+
+    assert transaction.to_amount == 120000.0
+
+
 def test_transaction_create_rejects_legacy_account_string_payload() -> None:
     payload = {
         "amount": 1200.0,
