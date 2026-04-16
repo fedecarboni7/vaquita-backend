@@ -233,6 +233,7 @@ def validate(state: AgentState) -> dict:
 
     # Validate and resolve destination account for transfers
     if subtype == "transfer":
+        data.setdefault("to_amount", None)
         destination_name = data.get("account_destination")
         if isinstance(destination_name, str) and destination_name.strip():
             normalized_destination_name, destination_account_id = _resolve_account_id(

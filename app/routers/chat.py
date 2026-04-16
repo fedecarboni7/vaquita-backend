@@ -22,7 +22,7 @@ MAX_AUDIO_BYTES = 10 * 1024 * 1024
 def _split_current_and_history(messages: list[ChatMessageIn]) -> tuple[str, list[dict] | None]:
     if not messages:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="messages cannot be empty",
         )
 
@@ -39,13 +39,13 @@ def _parse_messages_form(messages: str | None) -> list[dict] | None:
         raw_messages = json.loads(messages)
     except json.JSONDecodeError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Invalid messages payload",
         ) from exc
 
     if not isinstance(raw_messages, list):
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Invalid messages payload",
         )
 
@@ -53,7 +53,7 @@ def _parse_messages_form(messages: str | None) -> list[dict] | None:
         parsed_messages = [ChatMessageIn.model_validate(item) for item in raw_messages]
     except ValidationError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Invalid messages payload",
         ) from exc
 
@@ -212,7 +212,7 @@ async def chat_audio(
         )
     except ValueError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="No se pudo transcribir el audio",
         ) from exc
     except RuntimeError as exc:

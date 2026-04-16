@@ -47,6 +47,7 @@ class IncomeExtractorOutput(CurrencyNormalizedModel):
 
 class TransferExtractorOutput(CurrencyNormalizedModel):
     amount: float
+    to_amount: float | None = None
     description: str
     account: str
     account_destination: str

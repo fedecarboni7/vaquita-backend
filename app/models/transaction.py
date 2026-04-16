@@ -1,6 +1,7 @@
 import enum
 import uuid
 from datetime import date, datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 from sqlalchemy import Date, DateTime, Enum, ForeignKey, Index, Numeric, String, Text, func
@@ -40,6 +41,10 @@ class Transaction(Base):
     amount: Mapped[float] = mapped_column(
         Numeric(precision=14, scale=2),
         nullable=False,
+    )
+    to_amount: Mapped[Decimal | None] = mapped_column(
+        Numeric(precision=15, scale=2),
+        nullable=True,
     )
     currency: Mapped[str] = mapped_column(
         String(3),
@@ -113,6 +118,12 @@ class Transaction(Base):
         if self.destination_account is None:
             return None
         return self.destination_account.name
+
+    @property
+    def account_destination_currency(self) -> str | None:
+        if self.destination_account is None:
+            return None
+        return self.destination_account.currency
 
     @property
     def category_name(self) -> str | None:
