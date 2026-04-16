@@ -68,3 +68,29 @@ def test_validate_returns_clarification_when_account_is_invalid() -> None:
     assert result["response_type"] == "clarification"
     assert result["response_payload"] is None
     assert "Cuenta Fantasma" in result["messages"][0].content
+
+
+def test_validate_transfer_preserves_to_amount_in_draft_payload() -> None:
+    state = {
+        "extractor_output": {
+            "amount": 100.0,
+            "to_amount": 120000.0,
+            "description": "Transferencia USD a ARS",
+            "account": "Caja USD",
+            "account_destination": "Caja ARS",
+            "currency": "USD",
+        },
+        "classifier_output": ClassifierOutput(intent="register", subtype="transfer"),
+        "accounts": ["Caja USD", "Caja ARS"],
+        "account_name_to_id": {
+            "caja usd": "11111111-1111-1111-1111-111111111111",
+            "caja ars": "22222222-2222-2222-2222-222222222222",
+        },
+    }
+
+    result = validate(state)
+    payload = result["response_payload"]
+
+    assert payload["to_amount"] == 120000.0
+    assert payload["account_id"] == "11111111-1111-1111-1111-111111111111"
+    assert payload["account_destination_id"] == "22222222-2222-2222-2222-222222222222"

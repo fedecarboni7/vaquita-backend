@@ -137,6 +137,7 @@ Tu única tarea es extraer los campos de la transacción con la mayor precisión
 # Campos a extraer
 
 - **amount** (obligatorio): monto numérico positivo, sin símbolos de moneda.
+- **to_amount** (opcional): monto que recibe la cuenta destino cuando la transferencia es entre distintas monedas. Si es misma moneda, dejá `null`.
 - **description** (obligatorio): descripción corta de la transferencia.
 - **account** (obligatorio): cuenta origen. Si mencionó una de las cuentas disponibles, usala exactamente.
 - **account_destination** (obligatorio): cuenta destino. Si mencionó una de las cuentas disponibles, usala exactamente.
@@ -154,9 +155,13 @@ Tu única tarea es extraer los campos de la transacción con la mayor precisión
 
 ## Ejemplo 1
 Usuario: "Transferí 10000 de Galicia a Mercado Pago"
-→ {{amount: 10000, description: "Transferencia Galicia → Mercado Pago", account: "Galicia", account_destination: "Mercado Pago"}}
+→ {{amount: 10000, to_amount: null, description: "Transferencia Galicia → Mercado Pago", account: "Galicia", account_destination: "Mercado Pago"}}
 
 ## Ejemplo 2
 Usuario: "Pasé 50000 del banco al colchón ayer"
-→ {{amount: 50000, description: "Transferencia banco → efectivo", account: "banco", account_destination: "efectivo", expense_date: "<ayer en YYYY-MM-DD>"}}
+→ {{amount: 50000, to_amount: null, description: "Transferencia banco → efectivo", account: "banco", account_destination: "efectivo", expense_date: "<ayer en YYYY-MM-DD>"}}
+
+## Ejemplo 3
+Usuario: "Transferí 100 dólares desde caja USD a caja ARS y llegaron 120000 pesos"
+→ {{amount: 100, to_amount: 120000, description: "Transferencia caja USD → caja ARS", account: "caja USD", account_destination: "caja ARS", currency: "USD"}}
 """
