@@ -85,6 +85,7 @@ async def _calculate_balances_by_account(
             Transaction.account_destination_id,
             Transaction.type,
             Transaction.amount,
+            Transaction.to_amount,
             Transaction.expense_date,
         ).where(Transaction.user_id == user_id)
     )
@@ -115,8 +116,9 @@ async def _calculate_balances_by_account(
             if closed_balance is not None:
                 closed_period_balances[account_id] = closed_balance + delta
 
-    for account_id, account_destination_id, transaction_type, amount, expense_date in result.all():
+    for account_id, account_destination_id, transaction_type, amount, to_amount, expense_date in result.all():
         amount_decimal = Decimal(str(amount))
+        to_amount_decimal = Decimal(str(to_amount)) if to_amount is not None else None
 
         if transaction_type == TransactionType.income:
             apply_delta(account_id, amount_decimal, expense_date)
@@ -124,7 +126,7 @@ async def _calculate_balances_by_account(
             apply_delta(account_id, -amount_decimal, expense_date)
         elif transaction_type == TransactionType.transfer:
             apply_delta(account_id, -amount_decimal, expense_date)
-            apply_delta(account_destination_id, amount_decimal, expense_date)
+            apply_delta(account_destination_id, to_amount_decimal or amount_decimal, expense_date)
 
     total_balances = {name: float(balance) for name, balance in balances.items()}
     closed_balances = {

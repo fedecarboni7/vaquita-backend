@@ -56,6 +56,7 @@ def _build_transaction(
     note: str | None,
     installments: int | None,
     account_destination_id: uuid.UUID | None,
+    to_amount: Decimal | None,
     expense_date: date,
 ) -> Transaction:
     return Transaction(
@@ -71,8 +72,25 @@ def _build_transaction(
         note=note,
         installments=installments,
         account_destination_id=account_destination_id,
+        to_amount=to_amount,
         expense_date=expense_date,
     )
+
+
+def _normalize_transfer_to_amount(
+    to_amount_raw: Decimal | float | int | None,
+) -> Decimal | None:
+    if to_amount_raw is None:
+        return None
+
+    to_amount = Decimal(str(to_amount_raw)).quantize(MONEY_SCALE)
+    if to_amount <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="to_amount must be greater than 0",
+        )
+
+    return to_amount
 
 
 async def _get_account_for_user(
@@ -89,7 +107,7 @@ async def _get_account_for_user(
     account = result.scalar_one_or_none()
     if account is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Invalid account_id",
         )
     return account
@@ -101,7 +119,7 @@ def _validate_account_currency_match(
 ) -> None:
     if account.currency != currency:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=(
                 f"La cuenta '{account.name}' opera en {account.currency}. "
                 f"No se puede registrar una transacción en {currency}."
@@ -226,7 +244,7 @@ async def create_expense(
         if body.category_id:
             if subcategory.category_id != body.category_id:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="subcategory_id does not belong to category",
                 )
         else:
@@ -238,11 +256,13 @@ async def create_expense(
     source_account = await _get_account_for_user(session, current_user, body.account_id)
     _validate_account_currency_match(source_account, body.currency)
 
+    destination_account: Account | None = None
     destination_account_id: uuid.UUID | None = None
+    transfer_to_amount: Decimal | None = None
     if body.type == "transfer":
         if body.account_destination_id is None:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="account_destination_id is required for transfer",
             )
         destination_account = await _get_account_for_user(
@@ -250,17 +270,27 @@ async def create_expense(
             current_user,
             body.account_destination_id,
         )
-        _validate_account_currency_match(destination_account, body.currency)
         destination_account_id = destination_account.id
+    elif body.to_amount is not None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="to_amount is only valid for transfer",
+        )
 
     transaction_type = TransactionType(body.type)
     total_amount = Decimal(str(body.amount)).quantize(MONEY_SCALE)
+
+    if body.type == "transfer":
+        transfer_to_amount = _normalize_transfer_to_amount(body.to_amount)
+        if transfer_to_amount is None and destination_account is not None:
+            # Keep previous same-currency behavior unless to_amount is explicitly provided.
+            _validate_account_currency_match(destination_account, body.currency)
 
     if body.installments is not None:
         installments = body.installments
         if installments <= 0:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="installments must be greater than 0",
             )
 
@@ -292,6 +322,7 @@ async def create_expense(
                     note=body.note,
                     installments=installments,
                     account_destination_id=destination_account_id,
+                    to_amount=None,
                     expense_date=_add_months(body.expense_date, index),
                 )
             )
@@ -311,6 +342,7 @@ async def create_expense(
             note=body.note,
             installments=body.installments,
             account_destination_id=destination_account_id,
+            to_amount=transfer_to_amount,
             expense_date=body.expense_date,
         )
         session.add(transaction)
@@ -332,13 +364,13 @@ async def update_expense(
     update_data = body.model_dump(exclude_unset=True)
     if "amount" in update_data and update_data["amount"] is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="amount must be a number greater than 0",
         )
 
     if "amount" in update_data and update_data["amount"] <= 0:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="amount must be greater than 0",
         )
 
@@ -352,10 +384,11 @@ async def update_expense(
         "account_destination_id",
         transaction.account_destination_id,
     )
+    resolved_to_amount = update_data.get("to_amount", transaction.to_amount)
 
     if resolved_account_id is None:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="account_id is required",
         )
 
@@ -365,13 +398,18 @@ async def update_expense(
     if resolved_type == TransactionType.transfer:
         if resolved_destination_id is None:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="account_destination_id is required for transfer",
             )
         destination_account = await _get_account_for_user(session, current_user, resolved_destination_id)
-        _validate_account_currency_match(destination_account, resolved_currency)
+        if resolved_to_amount is None:
+            _validate_account_currency_match(destination_account, resolved_currency)
+            update_data["to_amount"] = None
+        else:
+            update_data["to_amount"] = _normalize_transfer_to_amount(resolved_to_amount)
     else:
         update_data["account_destination_id"] = None
+        update_data["to_amount"] = None
 
     if "category_id" in update_data and update_data["category_id"] is not None:
         await _get_category(session, current_user, update_data["category_id"])
@@ -383,7 +421,7 @@ async def update_expense(
             category_id = update_data.get("category_id", transaction.category_id)
             if category_id and subcategory.category_id != category_id:
                 raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                     detail="subcategory_id does not belong to category",
                 )
     elif "category_id" in update_data and transaction.subcategory_id is not None:
@@ -391,7 +429,7 @@ async def update_expense(
         new_category_id = update_data.get("category_id")
         if new_category_id and subcategory.category_id != new_category_id:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="Current subcategory_id does not belong to category",
             )
 
