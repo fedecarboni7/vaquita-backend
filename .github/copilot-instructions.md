@@ -23,6 +23,20 @@ uv sync
 uv run fastapi dev
 ```
 
+# Required Post-Task Validation (Mirror CI)
+
+After finishing any task or code edit in the backend repo, run the same checks used in CI:
+
+```bash
+uv sync
+uv run ruff check .
+uv run ruff format --check .
+uv run alembic upgrade head
+uv run pytest -v
+```
+
+In a multi-repo task, run these backend commands only when backend files were changed.
+
 # Auth Flow
 
 1. Frontend sends Google OAuth credential to `POST /auth/google`
