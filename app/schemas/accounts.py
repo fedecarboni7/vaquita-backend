@@ -60,6 +60,7 @@ class AccountResponse(BaseModel):
 
 class AccountAdjustRequest(BaseModel):
     balance: float
+    affects_balance: bool = True
 
 
 class AccountAdjustResponse(BaseModel):
