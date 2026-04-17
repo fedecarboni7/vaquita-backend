@@ -16,7 +16,7 @@ dependencies = [
     "langgraph>=1.0.10",
     "langchain-google-genai>=4.2.1",
     "langchain>=1.2.12",
-    "langchain-openai>=1.1.11",
+    "langchain-openai>=1.1.14",
 ]
 
 [dependency-groups]
