@@ -5,15 +5,11 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: FastAPI",
-            "type": "debugpy",
+            "name": "Run Backend FastAPI Dev (uv run fastapi dev)",
+            "type": "node-terminal",
             "request": "launch",
-            "module": "uvicorn",
-            "args": [
-                "app.main:app",
-                "--reload"
-            ],
-            "jinja": true
+            "command": "uv run fastapi dev",
+            "cwd": "${workspaceFolder}"
         }
     ]
 }
