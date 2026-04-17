@@ -39,6 +39,37 @@ def test_transaction_create_accepts_optional_transfer_conversion_fields() -> Non
     assert transaction.to_amount == 120000.0
 
 
+def test_transaction_create_defaults_affects_balance_to_true() -> None:
+    payload = {
+        "amount": 1200.0,
+        "description": "Supermercado",
+        "type": "expense",
+        "account_id": str(uuid4()),
+        "expense_date": date(2026, 4, 13).isoformat(),
+        "currency": "ARS",
+    }
+
+    transaction = TransactionCreate.model_validate(payload)
+
+    assert transaction.affects_balance is True
+
+
+def test_transaction_create_accepts_affects_balance_false() -> None:
+    payload = {
+        "amount": 1200.0,
+        "description": "Ajuste manual",
+        "type": "expense",
+        "account_id": str(uuid4()),
+        "expense_date": date(2026, 4, 13).isoformat(),
+        "currency": "ARS",
+        "affects_balance": False,
+    }
+
+    transaction = TransactionCreate.model_validate(payload)
+
+    assert transaction.affects_balance is False
+
+
 def test_transaction_create_rejects_legacy_account_string_payload() -> None:
     payload = {
         "amount": 1200.0,
@@ -60,3 +91,13 @@ def test_transaction_update_rejects_legacy_account_string_field() -> None:
 
     with pytest.raises(ValidationError):
         TransactionUpdate.model_validate(payload)
+
+
+def test_transaction_update_accepts_affects_balance_false() -> None:
+    payload = {
+        "affects_balance": False,
+    }
+
+    transaction = TransactionUpdate.model_validate(payload)
+
+    assert transaction.affects_balance is False

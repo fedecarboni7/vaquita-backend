@@ -317,6 +317,7 @@ async def adjust_account_balance(
         note=None,
         installments=None,
         account_destination_id=None,
+        affects_balance=body.affects_balance,
         expense_date=today,
     )
     session.add(transaction)

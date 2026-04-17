@@ -57,6 +57,7 @@ def _build_transaction(
     installments: int | None,
     account_destination_id: uuid.UUID | None,
     to_amount: Decimal | None,
+    affects_balance: bool,
     expense_date: date,
 ) -> Transaction:
     return Transaction(
@@ -73,6 +74,7 @@ def _build_transaction(
         installments=installments,
         account_destination_id=account_destination_id,
         to_amount=to_amount,
+        affects_balance=affects_balance,
         expense_date=expense_date,
     )
 
@@ -388,6 +390,7 @@ async def create_expense(
                     installments=installments,
                     account_destination_id=destination_account_id,
                     to_amount=None,
+                    affects_balance=body.affects_balance,
                     expense_date=_add_months(body.expense_date, index),
                 )
             )
@@ -408,6 +411,7 @@ async def create_expense(
             installments=body.installments,
             account_destination_id=destination_account_id,
             to_amount=transfer_to_amount,
+            affects_balance=body.affects_balance,
             expense_date=body.expense_date,
         )
         session.add(transaction)
@@ -437,6 +441,12 @@ async def update_expense(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="amount must be greater than 0",
+        )
+
+    if "affects_balance" in update_data and update_data["affects_balance"] is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="affects_balance must be a boolean",
         )
 
     if "type" in update_data:

@@ -22,6 +22,7 @@ class TransactionCreate(BaseModel):
     installments: int | None = None
     account_destination_id: uuid.UUID | None = None
     to_amount: float | None = None
+    affects_balance: bool = True
 
     @field_validator("currency", mode="before")
     @classmethod
@@ -46,6 +47,7 @@ class TransactionUpdate(BaseModel):
     installments: int | None = None
     account_destination_id: uuid.UUID | None = None
     to_amount: float | None = None
+    affects_balance: bool | None = None
 
     @field_validator("currency", mode="before")
     @classmethod
@@ -82,5 +84,6 @@ class TransactionResponse(BaseModel):
     account_destination: str | None = None
     account_destination_currency: CurrencyCode | None = None
     to_amount: float | None = None
+    affects_balance: bool
     created_at: datetime
     updated_at: datetime
