@@ -85,6 +85,7 @@ async def _fetch_month_totals(
             Transaction.user_id == user_id,
             Transaction.expense_date >= month_start,
             Transaction.expense_date <= month_end,
+            Transaction.affects_balance.is_(True),
             Transaction.type.in_([TransactionType.income, TransactionType.expense]),
         )
     )
@@ -120,6 +121,7 @@ async def _fetch_monthly_series(
             Transaction.user_id == user_id,
             Transaction.expense_date >= from_month_start,
             Transaction.expense_date <= to_month_end,
+            Transaction.affects_balance.is_(True),
             Transaction.type.in_([TransactionType.income, TransactionType.expense]),
         )
         .group_by(month_bucket)
@@ -181,6 +183,7 @@ async def _fetch_expenses_by_category(
             Transaction.user_id == user_id,
             Transaction.expense_date >= month_start,
             Transaction.expense_date <= month_end,
+            Transaction.affects_balance.is_(True),
             Transaction.type == TransactionType.expense,
         )
         .group_by(category_label)
