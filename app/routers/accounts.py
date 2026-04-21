@@ -3,8 +3,8 @@ from collections import defaultdict
 from datetime import date
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -17,6 +17,7 @@ from app.schemas.accounts import (
     AccountAdjustResponse,
     AccountCreate,
     AccountResponse,
+    AccountSummaryResponse,
     AccountUpdate,
 )
 
@@ -181,6 +182,103 @@ async def get_account(
         account,
         balances_by_account.get(account.id, 0.0),
         closed_period_balances.get(account.id),
+    )
+
+
+@router.get("/{account_id}/summary", response_model=AccountSummaryResponse)
+async def get_account_summary(
+    account_id: uuid.UUID,
+    from_date: date = Query(..., alias="from"),
+    to_date: date = Query(..., alias="to"),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> AccountSummaryResponse:
+    if from_date > to_date:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="'from' date must be less than or equal to 'to' date",
+        )
+
+    account_result = await session.execute(
+        select(Account).where(
+            Account.id == account_id,
+            Account.user_id == current_user.id,
+        )
+    )
+    account = account_result.scalar_one_or_none()
+    if account is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Account not found")
+
+    in_range = and_(
+        Transaction.expense_date >= from_date,
+        Transaction.expense_date <= to_date,
+    )
+    participates_in_account = or_(
+        Transaction.account_id == account_id,
+        Transaction.account_destination_id == account_id,
+    )
+
+    income_amount = case(
+        (
+            and_(
+                Transaction.type == TransactionType.income,
+                Transaction.account_id == account_id,
+            ),
+            Transaction.amount,
+        ),
+        (
+            and_(
+                Transaction.type == TransactionType.transfer,
+                Transaction.account_destination_id == account_id,
+            ),
+            func.coalesce(Transaction.to_amount, Transaction.amount),
+        ),
+        else_=0,
+    )
+    expense_amount = case(
+        (
+            and_(
+                Transaction.type == TransactionType.expense,
+                Transaction.account_id == account_id,
+            ),
+            Transaction.amount,
+        ),
+        (
+            and_(
+                Transaction.type == TransactionType.transfer,
+                Transaction.account_id == account_id,
+            ),
+            Transaction.amount,
+        ),
+        else_=0,
+    )
+
+    summary_result = await session.execute(
+        select(
+            func.coalesce(func.sum(income_amount), 0).label("total_income"),
+            func.coalesce(func.sum(expense_amount), 0).label("total_expenses"),
+            (func.coalesce(func.sum(income_amount), 0) - func.coalesce(func.sum(expense_amount), 0)).label(
+                "net_balance"
+            ),
+            func.coalesce(func.count(Transaction.id), 0).label("transaction_count"),
+        ).where(
+            Transaction.user_id == current_user.id,
+            in_range,
+            participates_in_account,
+        )
+    )
+    summary = summary_result.one()
+
+    return AccountSummaryResponse(
+        account_id=account.id,
+        account_name=account.name,
+        currency=account.currency,
+        from_date=from_date,
+        to_date=to_date,
+        total_income=float(summary.total_income),
+        total_expenses=float(summary.total_expenses),
+        net_balance=float(summary.net_balance),
+        transaction_count=int(summary.transaction_count),
     )
 
 
