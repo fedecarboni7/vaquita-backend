@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 CurrencyCode = Literal["ARS", "USD", "EUR"]
 AccountTypeCode = Literal["savings", "checking", "credit_card", "digital_wallet", "cash"]
@@ -66,3 +66,17 @@ class AccountAdjustRequest(BaseModel):
 class AccountAdjustResponse(BaseModel):
     applied: bool
     delta: float
+
+
+class AccountSummaryResponse(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    account_id: uuid.UUID
+    account_name: str
+    currency: CurrencyCode
+    from_date: date = Field(alias="from")
+    to_date: date = Field(alias="to")
+    total_income: float
+    total_expenses: float
+    net_balance: float
+    transaction_count: int
