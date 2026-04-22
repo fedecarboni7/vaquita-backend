@@ -2,7 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, field_validator
 
-CurrencyCode = Literal["ARS", "USD", "EUR"]
+CurrencyCode = Literal["ARS", "USD"]
 
 
 class CurrencyNormalizedModel(BaseModel):

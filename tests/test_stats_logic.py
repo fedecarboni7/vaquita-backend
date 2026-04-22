@@ -2,8 +2,11 @@ from datetime import date
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import select
 
+from app.models.transaction import Transaction
 from app.routers.stats import (
+    _apply_stats_currency_filter,
     _compute_delta_pct,
     _month_bounds,
     _month_key,
@@ -48,3 +51,13 @@ def test_compute_delta_pct_matches_formula() -> None:
 def test_compute_delta_pct_returns_none_when_previous_is_zero_or_missing() -> None:
     assert _compute_delta_pct(100.0, 0.0) is None
     assert _compute_delta_pct(100.0, None) is None
+
+
+def test_apply_stats_currency_filter_adds_join_and_currency_predicate() -> None:
+    base_query = select(Transaction.id)
+
+    filtered = _apply_stats_currency_filter(base_query, currency="USD")
+    compiled = str(filtered)
+
+    assert "JOIN accounts" in compiled
+    assert "accounts.currency" in compiled

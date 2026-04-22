@@ -1,5 +1,6 @@
 from calendar import monthrange
 from datetime import date, datetime
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import case, func, literal, select
@@ -7,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
 from app.database import get_session
+from app.models.account import Account
 from app.models.category import Category
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
@@ -60,12 +62,17 @@ def _compute_delta_pct(current: float, previous: float | None) -> float | None:
     return round(delta, 1)
 
 
+def _apply_stats_currency_filter(base_query, *, currency: Literal["ARS", "USD"]):
+    return base_query.join(Account, Account.id == Transaction.account_id).where(Account.currency == currency)
+
+
 async def _fetch_month_totals(
     session: AsyncSession,
     *,
     user_id,
     month_start: date,
     month_end: date,
+    currency: Literal["ARS", "USD"],
 ) -> tuple[float, float, int]:
     income_expr = case(
         (Transaction.type == TransactionType.income, Transaction.amount),
@@ -76,19 +83,20 @@ async def _fetch_month_totals(
         else_=0,
     )
 
-    result = await session.execute(
-        select(
-            func.coalesce(func.sum(income_expr), 0).label("total_income"),
-            func.coalesce(func.sum(expense_expr), 0).label("total_expenses"),
-            func.count(Transaction.id).label("transaction_count"),
-        ).where(
-            Transaction.user_id == user_id,
-            Transaction.expense_date >= month_start,
-            Transaction.expense_date <= month_end,
-            Transaction.affects_balance.is_(True),
-            Transaction.type.in_([TransactionType.income, TransactionType.expense]),
-        )
+    query = select(
+        func.coalesce(func.sum(income_expr), 0).label("total_income"),
+        func.coalesce(func.sum(expense_expr), 0).label("total_expenses"),
+        func.count(Transaction.id).label("transaction_count"),
+    ).where(
+        Transaction.user_id == user_id,
+        Transaction.expense_date >= month_start,
+        Transaction.expense_date <= month_end,
+        Transaction.affects_balance.is_(True),
+        Transaction.type.in_([TransactionType.income, TransactionType.expense]),
     )
+    query = _apply_stats_currency_filter(query, currency=currency)
+
+    result = await session.execute(query)
     row = result.one()
     return float(row.total_income), float(row.total_expenses), int(row.transaction_count)
 
@@ -100,6 +108,7 @@ async def _fetch_monthly_series(
     from_month_start: date,
     to_month_end: date,
     requested_month_start: date,
+    currency: Literal["ARS", "USD"],
 ) -> list[StatsMonthlySeriesItem]:
     income_expr = case(
         (Transaction.type == TransactionType.income, Transaction.amount),
@@ -111,7 +120,7 @@ async def _fetch_monthly_series(
     )
     month_bucket = func.date_trunc(literal("month"), Transaction.expense_date)
 
-    result = await session.execute(
+    query = (
         select(
             month_bucket.label("month_bucket"),
             func.coalesce(func.sum(income_expr), 0).label("total_income"),
@@ -127,6 +136,9 @@ async def _fetch_monthly_series(
         .group_by(month_bucket)
         .order_by(month_bucket)
     )
+    query = _apply_stats_currency_filter(query, currency=currency)
+
+    result = await session.execute(query)
 
     values_by_month: dict[str, tuple[float, float]] = {}
     for row in result.all():
@@ -159,6 +171,7 @@ async def _fetch_expenses_by_category(
     user_id,
     month_start: date,
     month_end: date,
+    currency: Literal["ARS", "USD"],
 ) -> list[StatsCategoryExpenseItem]:
     category_label = func.coalesce(Category.name, literal("Sin categoría"))
     category_total = func.sum(Transaction.amount)
@@ -171,7 +184,7 @@ async def _fetch_expenses_by_category(
         1,
     )
 
-    result = await session.execute(
+    query = (
         select(
             category_label.label("category_name"),
             category_total.label("total"),
@@ -189,6 +202,9 @@ async def _fetch_expenses_by_category(
         .group_by(category_label)
         .order_by(category_total.desc())
     )
+    query = _apply_stats_currency_filter(query, currency=currency)
+
+    result = await session.execute(query)
 
     return [
         StatsCategoryExpenseItem(
@@ -203,6 +219,7 @@ async def _fetch_expenses_by_category(
 @router.get("", response_model=StatsResponse)
 async def get_stats(
     month: str = Query(..., pattern=r"^\d{4}-\d{2}$"),
+    currency: Literal["ARS", "USD"] = Query("ARS"),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> StatsResponse:
@@ -217,12 +234,14 @@ async def get_stats(
         user_id=current_user.id,
         month_start=requested_month_start,
         month_end=requested_month_end,
+        currency=currency,
     )
     prev_income, prev_expenses, prev_count = await _fetch_month_totals(
         session,
         user_id=current_user.id,
         month_start=previous_month_start,
         month_end=previous_month_end,
+        currency=currency,
     )
 
     net_balance = total_income - total_expenses
@@ -234,6 +253,7 @@ async def get_stats(
         from_month_start=_shift_month(requested_month_start, -5),
         to_month_end=requested_month_end,
         requested_month_start=requested_month_start,
+        currency=currency,
     )
 
     expenses_by_category = await _fetch_expenses_by_category(
@@ -241,6 +261,7 @@ async def get_stats(
         user_id=current_user.id,
         month_start=requested_month_start,
         month_end=requested_month_end,
+        currency=currency,
     )
 
     summary = StatsSummaryResponse(
