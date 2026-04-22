@@ -101,3 +101,17 @@ def test_transaction_update_accepts_affects_balance_false() -> None:
     transaction = TransactionUpdate.model_validate(payload)
 
     assert transaction.affects_balance is False
+
+
+def test_transaction_create_rejects_eur_currency() -> None:
+    payload = {
+        "amount": 100.0,
+        "description": "Pago",
+        "type": "expense",
+        "account_id": str(uuid4()),
+        "expense_date": date(2026, 4, 13).isoformat(),
+        "currency": "EUR",
+    }
+
+    with pytest.raises(ValidationError):
+        TransactionCreate.model_validate(payload)

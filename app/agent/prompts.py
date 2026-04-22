@@ -67,7 +67,7 @@ Tu única tarea es extraer los campos de la transacción con la mayor precisión
 - **category** (opcional): categoría del gasto según las disponibles.
 - **subcategory_name** (opcional): nombre de subcategoría más específica si aplica.
 - **expense_date** (opcional): fecha en formato YYYY-MM-DD. Calculá fechas relativas como "ayer" o "el lunes" en base a la fecha de hoy. Si no se menciona, dejá null.
-- **currency** (opcional): "ARS" por defecto siempre. Usá "USD" si el usuario menciona explícitamente dólares, USD, dólar, dolares o similar. Usá "EUR" si menciona euros, EUR o €.
+- **currency** (opcional): "ARS" por defecto siempre. Usá "USD" si el usuario menciona explícitamente dólares, USD, dólar, dolares o similar.
 - **installments** (opcional): número de cuotas entre 1 y 60. Incluir solo si el usuario lo menciona, sino omitir.
 - **note** (opcional): contexto extra que mencione el usuario.
 
@@ -107,7 +107,7 @@ Tu única tarea es extraer los campos de la transacción con la mayor precisión
 - **category** (opcional): categoría del ingreso según las disponibles.
 - **subcategory_name** (opcional): nombre de subcategoría más específica si aplica.
 - **expense_date** (opcional): fecha en formato YYYY-MM-DD. Calculá fechas relativas como "ayer" o "el lunes" en base a la fecha de hoy. Si no se menciona, dejá null.
-- **currency** (opcional): "ARS" por defecto siempre. Usá "USD" si el usuario menciona explícitamente dólares, USD, dólar, dolares o similar. Usá "EUR" si menciona euros, EUR o €.
+- **currency** (opcional): "ARS" por defecto siempre. Usá "USD" si el usuario menciona explícitamente dólares, USD, dólar, dolares o similar.
 - **note** (opcional): contexto extra que mencione el usuario.
 
 # Cuentas del usuario
@@ -142,7 +142,7 @@ Tu única tarea es extraer los campos de la transacción con la mayor precisión
 - **account** (obligatorio): cuenta origen. Si mencionó una de las cuentas disponibles, usala exactamente.
 - **account_destination** (obligatorio): cuenta destino. Si mencionó una de las cuentas disponibles, usala exactamente.
 - **expense_date** (opcional): fecha en formato YYYY-MM-DD. Calculá fechas relativas como "ayer" o "el lunes" en base a la fecha de hoy. Si no se menciona, dejá null.
-- **currency** (opcional): "ARS" por defecto siempre. Usá "USD" si el usuario menciona explícitamente dólares, USD, dólar, dolares o similar. Usá "EUR" si menciona euros, EUR o €.
+- **currency** (opcional): "ARS" por defecto siempre. Usá "USD" si el usuario menciona explícitamente dólares, USD, dólar, dolares o similar.
 - **note** (opcional): contexto extra que mencione el usuario.
 
 # Cuentas del usuario

@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-CurrencyCode = Literal["ARS", "USD", "EUR"]
+CurrencyCode = Literal["ARS", "USD"]
 AccountTypeCode = Literal["savings", "checking", "credit_card", "digital_wallet", "cash"]
 
 
