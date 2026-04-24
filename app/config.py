@@ -17,11 +17,14 @@ class Settings(BaseSettings):
     FRONTEND_URL: str = "http://localhost:5173"
     GOOGLE_API_KEY: str = ""
     GROQ_API_KEY: str = ""
+    ENCRYPTION_KEY: str = ""
+    FREE_DAILY_LIMIT: int = 5
+    GROQ_DEFAULT_MODEL: str = "llama-3.3-70b-versatile"
+    GOOGLE_DEFAULT_MODEL: str = "gemini-2.5-flash"
     LANGSMITH_API_KEY: str = ""
     LANGSMITH_TRACING: bool = False
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
     LANGSMITH_PROJECT: str = "expenses tracker app"
-    LLM_MODEL: str = "gemini-flash-lite-latest"
 
 
 settings = Settings()

@@ -8,10 +8,12 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 if TYPE_CHECKING:
+    from app.models.agent_usage import AgentUsage
     from app.models.account import Account
     from app.models.category import Category
     from app.models.subcategory import Subcategory
     from app.models.transaction import Transaction
+    from app.models.user_api_key import UserApiKey
 
 
 class User(Base):
@@ -59,5 +61,12 @@ class User(Base):
         back_populates="user",
     )
     subcategories: Mapped[list["Subcategory"]] = relationship(
+        back_populates="user",
+    )
+    api_key: Mapped["UserApiKey | None"] = relationship(
+        back_populates="user",
+        uselist=False,
+    )
+    agent_usage_entries: Mapped[list["AgentUsage"]] = relationship(
         back_populates="user",
     )

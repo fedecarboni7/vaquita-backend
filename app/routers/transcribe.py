@@ -16,11 +16,6 @@ logger = logging.getLogger(__name__)
 
 MAX_AUDIO_BYTES = 10 * 1024 * 1024
 MODEL_NAME = "whisper-large-v3-turbo"
-TRANSCRIPTION_PROMPT = (
-    "Transcribí el siguiente audio exactamente como fue dicho, en el idioma original. "
-    "Devolvé únicamente la transcripción, sin explicaciones, sin puntuación adicional, "
-    "sin prefijos como 'Transcripción:'."
-)
 
 groq_client = AsyncGroq(api_key=settings.GROQ_API_KEY)
 
