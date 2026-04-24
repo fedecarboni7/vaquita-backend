@@ -6,6 +6,7 @@ from app.agent.schemas import ClassifierOutput
 
 
 class AgentState(MessagesState):
+    llm: Any = None
     classifier_output: ClassifierOutput | None = None
     extractor_output: dict[str, Any] | None = None
     response_type: str | None = None
