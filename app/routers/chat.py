@@ -21,6 +21,8 @@ from app.services.encryption import decrypt_key
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
+INVALID_API_KEY_MESSAGE = "Tu API key no es válida. Revisá que sea correcta en Configuración."
+
 
 def _split_current_and_history(messages: list[ChatMessageIn]) -> tuple[str, list[dict] | None]:
     if not messages:
@@ -230,6 +232,31 @@ def _build_chat_response(result: dict, transcribed_text: str | None = None) -> C
     )
 
 
+def _is_llm_provider_auth_error(error: Exception) -> bool:
+    status_code = getattr(error, "status_code", None)
+    if status_code in {400, 401, 403}:
+        return True
+
+    if isinstance(error, ValueError) and "unsupported provider" in str(error).lower():
+        return True
+
+    text = str(error).lower()
+    auth_markers = (
+        "invalid api key",
+        "api key is invalid",
+        "incorrect api key",
+        "authentication",
+        "unauthorized",
+        "forbidden",
+        "permission denied",
+        "permissiondenied",
+        "unauthenticated",
+        "credentials",
+        "invalid_argument",
+    )
+    return any(marker in text for marker in auth_markers)
+
+
 @router.post("", response_model=ChatResponse)
 async def chat(
     body: ChatRequest,
@@ -243,12 +270,23 @@ async def chat(
         current_user=current_user,
         session=session,
     )
-    result = await _process_chat_message(
-        current_message=current_message,
-        provider=provider,
-        api_key=api_key,
-        history=history,
-        current_user=current_user,
-        session=session,
-    )
+    try:
+        result = await _process_chat_message(
+            current_message=current_message,
+            provider=provider,
+            api_key=api_key,
+            history=history,
+            current_user=current_user,
+            session=session,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        if _is_llm_provider_auth_error(exc):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=INVALID_API_KEY_MESSAGE,
+            ) from exc
+        raise
+
     return _build_chat_response(result)
