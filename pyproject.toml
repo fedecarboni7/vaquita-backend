@@ -17,6 +17,7 @@ dependencies = [
     "langchain-google-genai>=4.2.1",
     "langchain>=1.2.12",
     "langchain-openai>=1.1.14",
+    "groq>=1.2.0",
 ]
 
 [dependency-groups]

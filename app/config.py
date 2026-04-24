@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     DEV_AUTH_MODE: bool = False
     FRONTEND_URL: str = "http://localhost:5173"
     GOOGLE_API_KEY: str = ""
+    GROQ_API_KEY: str = ""
     LANGSMITH_API_KEY: str = ""
     LANGSMITH_TRACING: bool = False
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"

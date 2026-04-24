@@ -11,6 +11,7 @@ from app.routers.auth import router as auth_router
 from app.routers.categories import router as categories_router
 from app.routers.chat import router as chat_router
 from app.routers.expenses import router as expenses_router
+from app.routers.transcribe import router as transcribe_router
 from app.routers.stats import router as stats_router
 from app.routers.subcategories import router as subcategories_router
 
@@ -41,6 +42,7 @@ app.include_router(auth_router)
 app.include_router(categories_router)
 app.include_router(subcategories_router)
 app.include_router(chat_router)
+app.include_router(transcribe_router)
 app.include_router(expenses_router)
 app.include_router(stats_router)
 
