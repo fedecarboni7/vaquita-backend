@@ -15,7 +15,6 @@ class Settings(BaseSettings):
     JWT_EXPIRATION_MINUTES: int = 1440  # 24 hours
     DEV_AUTH_MODE: bool = False
     FRONTEND_URL: str = "http://localhost:5173"
-    GOOGLE_API_KEY: str = ""
     GROQ_API_KEY: str = ""
     ENCRYPTION_KEY: str = ""
     FREE_DAILY_LIMIT: int = 5
