@@ -1,6 +1,7 @@
 from langchain_core.messages import HumanMessage
 from langgraph.graph import END, StateGraph
 
+from app.agent.llm import get_llm
 from app.agent.nodes import (
     classify,
     extract_expense,
@@ -66,6 +67,8 @@ _agent = _build_graph()
 
 async def run_agent(
     message: str,
+    provider: str,
+    api_key: str,
     history: list[dict] | None = None,
     expense_categories: list[str] | None = None,
     income_categories: list[str] | None = None,
@@ -82,6 +85,8 @@ async def run_agent(
 
     Args:
         message: The current user message.
+        provider: LLM provider to use (google or groq).
+        api_key: API key for the selected provider.
         history: Optional list of previous messages (dicts with role/content).
         expense_categories: Expense category names for the user.
         income_categories: Income category names for the user.
@@ -103,10 +108,12 @@ async def run_agent(
                 messages.append(AIMessage(content=msg["content"]))
 
     messages.append(HumanMessage(content=message))
+    llm = get_llm(provider=provider, api_key=api_key)
 
     result = await _agent.ainvoke(
         {
             "messages": messages,
+            "llm": llm,
             "expense_categories": expense_categories or [],
             "income_categories": income_categories or [],
             "expense_category_tree": expense_category_tree or [],

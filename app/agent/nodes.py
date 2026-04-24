@@ -2,7 +2,6 @@ from datetime import date
 from math import floor
 
 from langchain_core.messages import AIMessage, SystemMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 from app.agent.prompts import (
     CLASSIFIER_PROMPT,
@@ -17,19 +16,18 @@ from app.agent.schemas import (
     TransferExtractorOutput,
 )
 from app.agent.state import AgentState
-from app.config import settings
 
 
-def _get_llm():
-    return ChatGoogleGenerativeAI(
-        model=settings.LLM_MODEL,
-        google_api_key=settings.GOOGLE_API_KEY,
-    )
+def _get_runtime_llm(state: AgentState):
+    llm = state.get("llm")
+    if llm is None:
+        raise ValueError("LLM is not available in agent state")
+    return llm
 
 
 def classify(state: AgentState) -> dict:
     """Classify user intent using the LLM."""
-    llm = _get_llm().with_structured_output(ClassifierOutput)
+    llm = _get_runtime_llm(state).with_structured_output(ClassifierOutput)
 
     system_msg = SystemMessage(content=CLASSIFIER_PROMPT.format(today=date.today().isoformat()))
     messages = [system_msg, *state["messages"]]
@@ -40,7 +38,7 @@ def classify(state: AgentState) -> dict:
 
 def extract_expense(state: AgentState) -> dict:
     """Extract expense fields from the user message."""
-    llm = _get_llm().with_structured_output(ExpenseExtractorOutput)
+    llm = _get_runtime_llm(state).with_structured_output(ExpenseExtractorOutput)
 
     accounts = state.get("accounts", [])
     acc_text = ", ".join(accounts) if accounts else "No hay cuentas definidas."
@@ -72,7 +70,7 @@ def extract_expense(state: AgentState) -> dict:
 
 def extract_income(state: AgentState) -> dict:
     """Extract income fields from the user message."""
-    llm = _get_llm().with_structured_output(IncomeExtractorOutput)
+    llm = _get_runtime_llm(state).with_structured_output(IncomeExtractorOutput)
 
     accounts = state.get("accounts", [])
     acc_text = ", ".join(accounts) if accounts else "No hay cuentas definidas."
@@ -104,7 +102,7 @@ def extract_income(state: AgentState) -> dict:
 
 def extract_transfer(state: AgentState) -> dict:
     """Extract transfer fields from the user message."""
-    llm = _get_llm().with_structured_output(TransferExtractorOutput)
+    llm = _get_runtime_llm(state).with_structured_output(TransferExtractorOutput)
 
     accounts = state.get("accounts", [])
     acc_text = ", ".join(accounts) if accounts else "No hay cuentas definidas."
