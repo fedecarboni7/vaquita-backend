@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,10 +13,8 @@ from app.models.account import Account
 from app.models.category import Category
 from app.models.user import User
 from app.schemas.chat import ChatMessageIn, ChatRequest, ChatResponse
-from app.services.transcription import transcribe_audio_bytes
 
 router = APIRouter(prefix="/chat", tags=["chat"])
-MAX_AUDIO_BYTES = 10 * 1024 * 1024
 
 
 def _split_current_and_history(messages: list[ChatMessageIn]) -> tuple[str, list[dict] | None]:
@@ -174,62 +172,3 @@ async def chat(
         session=session,
     )
     return _build_chat_response(result)
-
-
-@router.post("/audio", response_model=ChatResponse)
-async def chat_audio(
-    audio: UploadFile = File(...),
-    messages: str | None = Form(None),
-    current_user: User = Depends(get_current_user),
-    session: AsyncSession = Depends(get_session),
-) -> ChatResponse:
-    """Transcribe audio with Gemini and run the same chat agent flow."""
-    if not audio.content_type or not audio.content_type.startswith("audio/"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El archivo debe ser de audio",
-        )
-
-    audio_bytes = await audio.read()
-    if not audio_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="El audio enviado esta vacio",
-        )
-
-    if len(audio_bytes) > MAX_AUDIO_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="El audio excede el tamano maximo permitido",
-        )
-
-    history = _parse_messages_form(messages)
-
-    try:
-        transcribed_text = await transcribe_audio_bytes(
-            audio_bytes=audio_bytes,
-            mime_type=audio.content_type,
-        )
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="No se pudo transcribir el audio",
-        ) from exc
-    except RuntimeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="La transcripción de audio no esta configurada",
-        ) from exc
-    except Exception as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Error al transcribir el audio",
-        ) from exc
-
-    result = await _process_chat_message(
-        current_message=transcribed_text,
-        history=history,
-        current_user=current_user,
-        session=session,
-    )
-    return _build_chat_response(result, transcribed_text=transcribed_text)
