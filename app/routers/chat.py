@@ -205,7 +205,7 @@ async def _resolve_chat_credentials(
     if persisted_credentials is not None:
         return persisted_credentials
 
-    if not settings.GOOGLE_API_KEY:
+    if not settings.GROQ_API_KEY:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="No hay API key de fallback configurada en el servidor.",
@@ -218,7 +218,7 @@ async def _resolve_chat_credentials(
             detail="Alcanzaste el límite diario gratuito. Agregá tu propia API key en Configuración para seguir usando el agente.",
         )
 
-    return "google", settings.GOOGLE_API_KEY
+    return "groq", settings.GROQ_API_KEY
 
 
 def _build_chat_response(result: dict, transcribed_text: str | None = None) -> ChatResponse:
