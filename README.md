@@ -1,18 +1,16 @@
-# Expenses Tracker — Backend
+# Vaquita — Backend
 
-Backend de una aplicación de gastos impulsada por IA. Permite registrar gastos en lenguaje natural y consultar la información mediante un agente conversacional que utiliza herramientas determinísticas sobre la base de datos.
+Backend de [Vaquita](https://vaquita.up.railway.app), una app de finanzas personales con IA integrada. Los usuarios registran transacciones en lenguaje natural a través de un chat, y el agente interpreta, estructura y persiste la información automáticamente.
 
 ---
 
-## Propósito
+## ¿Qué hace?
 
-Construir **la forma más rápida y privada de entender tus gastos personales usando IA**.
-
-Diferenciales clave:
-
-- Registro de transacciones por chat en lenguaje natural
-- Agente de IA con herramientas determinísticas sobre la base de datos
-- Cálculos realizados en SQL (no en el LLM)
+- **Chat financiero con IA** — registrá gastos, ingresos y transferencias escribiendo o mandando un audio
+- **Agente LangGraph multi-nodo** — clasifica la intención, extrae los datos y valida contra las cuentas y categorías reales del usuario
+- **Cálculos determinísticos** — toda la aritmética y lógica de negocio se ejecuta en Python/SQL, no en el LLM
+- **BYOK (Bring Your Own Key)** — soporte para Groq y Google AI Studio; si el usuario carga su propia API key, se usa en lugar de la del servidor
+- **Rate limiting** — límite diario de uso gratuito compartido entre chat y transcripción de audio
 
 ---
 
@@ -27,7 +25,8 @@ Diferenciales clave:
 | ORM | SQLAlchemy (async) + asyncpg |
 | Migraciones | Alembic |
 | Orquestación de IA | LangChain + LangGraph |
-| LLM | Gemini |
+| LLM | Gemini / Groq (configurable por usuario) |
+| Transcripción de audio | Whisper vía Groq / Gemini |
 | Auth | python-jose (JWT) + Google OAuth |
 | Linting / formato | Ruff |
 | Tests | pytest + pytest-asyncio |
@@ -36,10 +35,26 @@ Diferenciales clave:
 
 ## Cómo ejecutar
 
-### Con uv (desarrollo)
+### Requisitos
+
+- Python 3.12+
+- PostgreSQL
+- [uv](https://docs.astral.sh/uv/)
+
+### Setup
 
 ```bash
+# Instalar dependencias
 uv sync
+
+# Configurar variables de entorno
+cp .env.example .env
+# Completar los valores en .env
+
+# Aplicar migraciones
+uv run alembic upgrade head
+
+# Iniciar servidor de desarrollo
 uv run fastapi dev
 ```
 
@@ -69,11 +84,11 @@ uv run alembic downgrade -1
 ## Tests
 
 ```bash
-uv run pytest
+uv run pytest -v
 ```
 
 ---
 
-## Estado
+## Licencia
 
-🚧 En desarrollo activo
+MIT
