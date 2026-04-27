@@ -24,7 +24,7 @@ class AgentUsage(Base):
         ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    date: Mapped[datetime.date] = mapped_column(Date, primary_key=True)
+    date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     usage_type: Mapped[UsageType] = mapped_column(
         Enum(UsageType, name="usage_type"),
         primary_key=True,
