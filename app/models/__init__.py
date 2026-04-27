@@ -1,4 +1,4 @@
-from app.models.agent_usage import AgentUsage
+from app.models.agent_usage import AgentUsage, UsageType
 from app.models.account import Account
 from app.models.base import Base
 from app.models.category import Category
@@ -16,6 +16,7 @@ __all__ = [
     "Subcategory",
     "Transaction",
     "TransactionType",
+    "UsageType",
     "User",
     "UserApiKey",
 ]
