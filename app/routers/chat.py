@@ -1,4 +1,3 @@
-from datetime import date
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,19 +8,19 @@ from sqlalchemy.orm import selectinload
 
 from app.agent.graph import run_agent
 from app.auth import get_current_user
-from app.config import settings
 from app.database import get_session
-from app.models.agent_usage import AgentUsage
+from app.models.agent_usage import UsageType
 from app.models.account import Account
 from app.models.category import Category
-from app.models.user_api_key import UserApiKey
 from app.models.user import User
 from app.schemas.chat import ChatMessageIn, ChatRequest, ChatResponse
-from app.services.encryption import decrypt_key
+from app.services.ai_access import (
+    INVALID_API_KEY_MESSAGE,
+    is_llm_provider_auth_error,
+    resolve_api_credentials,
+)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
-
-INVALID_API_KEY_MESSAGE = "Tu API key no es válida. Revisá que sea correcta en Configuración."
 
 
 def _split_current_and_history(messages: list[ChatMessageIn]) -> tuple[str, list[dict] | None]:
@@ -159,70 +158,6 @@ async def _process_chat_message(
     )
 
 
-async def _get_persisted_user_api_key(
-    *,
-    current_user: User,
-    session: AsyncSession,
-) -> tuple[str, str] | None:
-    result = await session.execute(select(UserApiKey).where(UserApiKey.user_id == current_user.id))
-    user_api_key = result.scalar_one_or_none()
-    if user_api_key is None or not user_api_key.persist:
-        return None
-
-    return user_api_key.provider.value, decrypt_key(user_api_key.encrypted_key)
-
-
-async def _consume_free_quota(
-    *,
-    current_user: User,
-    session: AsyncSession,
-) -> bool:
-    today = date.today()
-    usage = await session.get(AgentUsage, {"user_id": current_user.id, "date": today})
-
-    if usage is None:
-        usage = AgentUsage(user_id=current_user.id, date=today, request_count=1)
-        session.add(usage)
-        await session.commit()
-        return True
-
-    if usage.request_count >= settings.FREE_DAILY_LIMIT:
-        return False
-
-    usage.request_count += 1
-    await session.commit()
-    return True
-
-
-async def _resolve_chat_credentials(
-    *,
-    body: ChatRequest,
-    current_user: User,
-    session: AsyncSession,
-) -> tuple[str, str]:
-    if body.session_api_key is not None:
-        return body.session_api_key.provider.value, body.session_api_key.api_key
-
-    persisted_credentials = await _get_persisted_user_api_key(current_user=current_user, session=session)
-    if persisted_credentials is not None:
-        return persisted_credentials
-
-    if not settings.GROQ_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="No hay API key de fallback configurada en el servidor.",
-        )
-
-    within_limit = await _consume_free_quota(current_user=current_user, session=session)
-    if not within_limit:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Alcanzaste el límite diario gratuito. Agregá tu propia API key en Configuración para seguir usando el agente.",
-        )
-
-    return "groq", settings.GROQ_API_KEY
-
-
 def _build_chat_response(result: dict, transcribed_text: str | None = None) -> ChatResponse:
     return ChatResponse(
         response_type=result["response_type"],
@@ -230,31 +165,6 @@ def _build_chat_response(result: dict, transcribed_text: str | None = None) -> C
         data=result.get("data"),
         transcribed_text=transcribed_text,
     )
-
-
-def _is_llm_provider_auth_error(error: Exception) -> bool:
-    status_code = getattr(error, "status_code", None)
-    if status_code in {400, 401, 403}:
-        return True
-
-    if isinstance(error, ValueError) and "unsupported provider" in str(error).lower():
-        return True
-
-    text = str(error).lower()
-    auth_markers = (
-        "invalid api key",
-        "api key is invalid",
-        "incorrect api key",
-        "authentication",
-        "unauthorized",
-        "forbidden",
-        "permission denied",
-        "permissiondenied",
-        "unauthenticated",
-        "credentials",
-        "invalid_argument",
-    )
-    return any(marker in text for marker in auth_markers)
 
 
 @router.post("", response_model=ChatResponse)
@@ -265,16 +175,17 @@ async def chat(
 ) -> ChatResponse:
     """Run the user message through the AI agent."""
     current_message, history = _split_current_and_history(body.messages)
-    provider, api_key = await _resolve_chat_credentials(
-        body=body,
+    resolved_credentials = await resolve_api_credentials(
         current_user=current_user,
         session=session,
+        usage_type=UsageType.chat,
+        session_api_key=body.session_api_key,
     )
     try:
         result = await _process_chat_message(
             current_message=current_message,
-            provider=provider,
-            api_key=api_key,
+            provider=resolved_credentials.provider,
+            api_key=resolved_credentials.api_key,
             history=history,
             current_user=current_user,
             session=session,
@@ -282,7 +193,7 @@ async def chat(
     except HTTPException:
         raise
     except Exception as exc:
-        if _is_llm_provider_auth_error(exc):
+        if is_llm_provider_auth_error(exc):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=INVALID_API_KEY_MESSAGE,
