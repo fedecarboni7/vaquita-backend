@@ -19,6 +19,7 @@ from app.models.agent_usage import UsageType
 from app.models.user import User
 from app.schemas.chat import SessionApiKeyPayload
 from app.services.ai_access import (
+    FREE_LIMIT_REACHED_TRANSCRIBE_MESSAGE,
     INVALID_API_KEY_MESSAGE,
     is_llm_provider_auth_error,
     resolve_api_credentials,
@@ -188,6 +189,7 @@ async def transcribe_audio(
             session=session,
             usage_type=UsageType.transcribe,
             session_api_key=parsed_session_api_key,
+            limit_reached_message=FREE_LIMIT_REACHED_TRANSCRIBE_MESSAGE,
         )
         filename = _build_filename(audio.content_type)
         if resolved_credentials.provider == "google":

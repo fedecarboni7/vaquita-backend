@@ -14,9 +14,10 @@ from app.models.user_api_key import UserApiKey
 from app.schemas.chat import SessionApiKeyPayload
 from app.services.encryption import decrypt_key
 
-FREE_LIMIT_REACHED_MESSAGE = (
+FREE_LIMIT_REACHED_AGENT_MESSAGE = (
     "Alcanzaste el límite diario gratuito. Agregá tu propia API key en Configuración para seguir usando el agente."
 )
+FREE_LIMIT_REACHED_TRANSCRIBE_MESSAGE = "Alcanzaste el límite diario gratuito de transcripción. Agregá tu propia API key en Configuración para seguir transcribiendo audio."
 FALLBACK_API_KEY_MISSING_MESSAGE = "No hay API key de fallback configurada en el servidor."
 INVALID_API_KEY_MESSAGE = "Tu API key no es válida. Revisá que sea correcta en Configuración."
 
@@ -51,7 +52,6 @@ async def _consume_free_quota(
         AgentUsage,
         {
             "user_id": current_user.id,
-            "date": today,
             "usage_type": usage_type,
         },
     )
@@ -64,6 +64,12 @@ async def _consume_free_quota(
             request_count=1,
         )
         session.add(usage)
+        await session.commit()
+        return True
+
+    if usage.date != today:
+        usage.date = today
+        usage.request_count = 1
         await session.commit()
         return True
 
@@ -81,6 +87,7 @@ async def resolve_api_credentials(
     session: AsyncSession,
     usage_type: UsageType,
     session_api_key: SessionApiKeyPayload | None = None,
+    limit_reached_message: str = FREE_LIMIT_REACHED_AGENT_MESSAGE,
 ) -> ResolvedApiCredentials:
     if session_api_key is not None:
         return ResolvedApiCredentials(
@@ -107,7 +114,7 @@ async def resolve_api_credentials(
     if not within_limit:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=FREE_LIMIT_REACHED_MESSAGE,
+            detail=limit_reached_message,
         )
 
     return ResolvedApiCredentials(provider="groq", api_key=settings.GROQ_API_KEY)
