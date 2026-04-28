@@ -15,6 +15,7 @@ from app.routers.settings import router as settings_router
 from app.routers.transcribe import router as transcribe_router
 from app.routers.stats import router as stats_router
 from app.routers.subcategories import router as subcategories_router
+from app.routers.users import router as users_router
 
 
 @asynccontextmanager
@@ -47,6 +48,7 @@ app.include_router(transcribe_router)
 app.include_router(expenses_router)
 app.include_router(settings_router)
 app.include_router(stats_router)
+app.include_router(users_router)
 
 
 @app.get("/health")
