@@ -15,7 +15,7 @@ class Account(Base):
     __tablename__ = "accounts"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     account_type: Mapped[str] = mapped_column(String(32), nullable=False, default="savings", server_default="savings")
     currency: Mapped[str] = mapped_column(String(3), nullable=False, default="ARS", server_default="ARS")

@@ -44,14 +44,15 @@ In a multi-repo task, run these backend commands only when backend files were ch
 3. Backend issues its own JWT using python-jose
 4. All protected endpoints expect: `Authorization: Bearer <token>`
 
-# Main Endpoints
+# Testing Philosophy
 
-```
-POST /auth/google   — verify Google credential, return { access_token }
-POST /chat          — run user message through the AI agent, return { reply }
-GET  /expenses      — return stored expenses for the authenticated user
-POST /expenses      — manually create a new expense
-```
+- Write tests for: new endpoints (contract tests) and business logic with arithmetic or validation
+- Do NOT write tests for: helper utilities, simple CRUD with no logic, or frontend code
+- No coverage thresholds — coverage is informational only, not a CI gate
+- Keep tests small and independent — each test should set up and tear down its own state
+- Prefer real behavior over mocks: use the actual FastAPI test client, avoid patching internals
+- One test file per feature or module (e.g. `test_delete_account_contract.py`)
+- Use pytest-asyncio for all async tests (`asyncio_mode = "auto"` is already configured)
 
 # AI Agent
 
