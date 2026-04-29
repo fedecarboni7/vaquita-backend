@@ -334,7 +334,9 @@ def handle_direct_answer(state: AgentState) -> dict:
     output = state["classifier_output"]
     text = (
         output.direct_answer_message
-        or "Soy un asistente de finanzas personales. Podés registrar gastos, ingresos y transferencias mandándome un mensaje."
+        or "¡Hola! Soy Vaquita, tu asistente de finanzas personales. "
+            "Puedo registrar gastos, ingresos y transferencias por texto o audio."
+            "Decime en qué te doy una mano."
     )
 
     return {
