@@ -335,8 +335,8 @@ def handle_direct_answer(state: AgentState) -> dict:
     text = (
         output.direct_answer_message
         or "¡Hola! Soy Vaquita, tu asistente de finanzas personales. "
-            "Puedo registrar gastos, ingresos y transferencias por texto o audio."
-            "Decime en qué te doy una mano."
+        "Puedo registrar gastos, ingresos y transferencias por texto o audio."
+        "Decime en qué te doy una mano."
     )
 
     return {
