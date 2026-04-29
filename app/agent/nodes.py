@@ -150,12 +150,6 @@ def _resolve_category_id(category_name: str, category_index: dict[str, str]) -> 
     return category_name, None
 
 
-def _format_amount_es_ar(amount: float) -> str:
-    # Convert 1,234,567.89 -> 1.234.567,89
-    formatted = f"{amount:,.2f}"
-    return formatted.replace(",", "#").replace(".", ",").replace("#", ".")
-
-
 def _resolve_account_id(
     account_name: str,
     accounts: list[str],
@@ -314,16 +308,7 @@ def validate(state: AgentState) -> dict:
         per_installment = data["amount"] / installments
         data["installment_amount"] = floor(per_installment * 100) / 100
 
-    # Build summary message
-    parts = [f"${_format_amount_es_ar(data['amount'])}", data.get("description", "")]
-    if data.get("account"):
-        parts.append(f"({data['account']})")
-    if data.get("category_name"):
-        parts.append(f"[{data['category_name']}]")
-    if data.get("subcategory_name"):
-        parts.append(f"<{data['subcategory_name']}>")
-
-    message = f"Registré: {' — '.join(parts)}"
+    message = "¡Listo! Revisá los detalles y confirmá si todo está bien."
 
     return {
         "response_type": "draft",

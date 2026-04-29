@@ -45,7 +45,7 @@ def test_validate_formats_message_amount_with_argentina_separators() -> None:
     result = validate(state)
     assistant_message = result["messages"][0].content
 
-    assert "$1.234.567,89" in assistant_message
+    assert assistant_message == "¡Listo! Revisá los detalles y confirmá si todo está bien."
 
 
 def test_validate_returns_clarification_when_account_is_invalid() -> None:
