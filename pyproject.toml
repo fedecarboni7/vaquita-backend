@@ -1,5 +1,5 @@
 [project]
-name = "expenses-tracker-backend"
+name = "vaquita-backend"
 version = "0.1.0"
 description = "AI-powered expenses tracker backend"
 readme = "README.md"
