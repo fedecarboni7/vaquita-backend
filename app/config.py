@@ -24,10 +24,10 @@ class Settings(BaseSettings):
     LANGSMITH_TRACING: bool = False
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
     LANGSMITH_PROJECT: str = "expenses tracker app"
-    R2_ACCOUNT_ID: str
-    R2_ACCESS_KEY_ID: str
-    R2_SECRET_ACCESS_KEY: str
-    R2_BUCKET_NAME: str
+    R2_ACCOUNT_ID: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_BUCKET_NAME: str = ""
     RECEIPT_DAILY_LIMIT: int = 10
 
 
