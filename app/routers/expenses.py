@@ -1,9 +1,11 @@
+import logging
 import uuid
 from calendar import monthrange
 from datetime import date
 from decimal import Decimal, ROUND_FLOOR
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+import filetype
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -21,9 +23,14 @@ from app.schemas.expenses import (
     TransactionResponse,
     TransactionUpdate,
 )
+from app.services.r2 import delete_receipt, get_receipt_signed_url, upload_receipt
+from app.services.upload_rate_limit import check_and_increment_upload_usage
 
 router = APIRouter(prefix="/expenses", tags=["expenses"])
 MONEY_SCALE = Decimal("0.01")
+RECEIPT_MAX_SIZE_BYTES = 1 * 1024 * 1024
+RECEIPT_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+logger = logging.getLogger(__name__)
 
 
 def _add_months(base_date: date, months: int) -> date:
@@ -515,6 +522,86 @@ async def update_expense(
     return await _get_transaction_for_user(session, current_user, transaction.id)
 
 
+@router.post("/{transaction_id}/receipt")
+async def upload_transaction_receipt(
+    transaction_id: uuid.UUID,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, str]:
+    transaction = await _get_transaction_for_user(session, current_user, transaction_id)
+
+    await check_and_increment_upload_usage(session, current_user.id)
+
+    file_bytes = await file.read()
+    if len(file_bytes) > RECEIPT_MAX_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail="El comprobante no puede superar 1MB",
+        )
+
+    kind = filetype.guess(file_bytes)
+    if kind is None or kind.mime not in RECEIPT_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Tipo de archivo no permitido",
+        )
+
+    if transaction.receipt_url:
+        try:
+            await delete_receipt(transaction.receipt_url)
+        except Exception:
+            logger.exception("Failed to delete previous receipt from R2")
+
+    object_key = await upload_receipt(
+        file_bytes=file_bytes,
+        content_type=kind.mime,
+        user_id=str(current_user.id),
+        transaction_id=str(transaction.id),
+    )
+
+    transaction.receipt_url = object_key
+    await session.commit()
+
+    signed_url = await get_receipt_signed_url(object_key)
+    return {"receipt_url": signed_url}
+
+
+@router.get("/{transaction_id}/receipt")
+async def get_transaction_receipt(
+    transaction_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, str]:
+    transaction = await _get_transaction_for_user(session, current_user, transaction_id)
+
+    if not transaction.receipt_url:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt not found")
+
+    signed_url = await get_receipt_signed_url(transaction.receipt_url)
+    return {"receipt_url": signed_url}
+
+
+@router.delete("/{transaction_id}/receipt", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_transaction_receipt(
+    transaction_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    transaction = await _get_transaction_for_user(session, current_user, transaction_id)
+
+    if not transaction.receipt_url:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt not found")
+
+    try:
+        await delete_receipt(transaction.receipt_url)
+    except Exception:
+        logger.exception("Failed to delete receipt from R2")
+
+    transaction.receipt_url = None
+    await session.commit()
+
+
 @router.delete("/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_expense(
     transaction_id: uuid.UUID,
@@ -522,6 +609,12 @@ async def delete_expense(
     session: AsyncSession = Depends(get_session),
 ) -> None:
     transaction = await _get_transaction_for_user(session, current_user, transaction_id)
+
+    if transaction.receipt_url:
+        try:
+            await delete_receipt(transaction.receipt_url)
+        except Exception:
+            logger.exception("Failed to delete receipt before removing transaction")
 
     await session.delete(transaction)
     await session.commit()

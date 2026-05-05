@@ -84,6 +84,10 @@ class Transaction(Base):
         Text,
         nullable=True,
     )
+    receipt_url: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True,
+    )
     installments: Mapped[int | None] = mapped_column(
         nullable=True,
     )
