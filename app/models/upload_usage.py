@@ -26,6 +26,4 @@ class UploadUsage(Base):
         server_default=text("1"),
     )
 
-    __table_args__ = (
-        UniqueConstraint("user_id", "upload_date", name="uq_upload_usage_user_date"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "upload_date", name="uq_upload_usage_user_date"),)
