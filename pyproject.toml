@@ -19,6 +19,8 @@ dependencies = [
     "langchain-openai>=1.1.14",
     "groq>=0.30.0,<1",
     "langchain-groq>=1.1.2",
+    "boto3>=1.43.3",
+    "filetype>=1.2.0",
 ]
 
 [dependency-groups]

@@ -79,6 +79,7 @@ class TransactionResponse(BaseModel):
     subcategory_name: str | None = None
     currency: CurrencyCode
     note: str | None = None
+    receipt_url: str | None = None
     installments: int | None = None
     account_destination_id: uuid.UUID | None = None
     account_destination: str | None = None
