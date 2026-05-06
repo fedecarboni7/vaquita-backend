@@ -293,7 +293,7 @@ async def list_expenses(
             selectinload(Transaction.source_account),
             selectinload(Transaction.destination_account),
         )
-        .order_by(Transaction.expense_date.desc())
+        .order_by(Transaction.expense_date.desc(), Transaction.created_at.desc())
         .limit(limit)
         .offset(offset)
     )
