@@ -127,7 +127,11 @@ async def _calculate_balances_by_account(
             apply_delta(account_id, -amount_decimal, expense_date)
         elif transaction_type == TransactionType.transfer:
             apply_delta(account_id, -amount_decimal, expense_date)
-            apply_delta(account_destination_id, to_amount_decimal or amount_decimal, expense_date)
+            dest_account = next((a for a in accounts if a.id == account_destination_id), None)
+            if dest_account and dest_account.account_type == "credit_card":
+                balances[account_destination_id] += to_amount_decimal or amount_decimal
+            else:
+                apply_delta(account_destination_id, to_amount_decimal or amount_decimal, expense_date)
 
     total_balances = {name: float(balance) for name, balance in balances.items()}
     closed_balances = {
