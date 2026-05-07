@@ -1,6 +1,8 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from groq import RateLimitError as GroqRateLimitError
+from langchain_google_genai.chat_models import ChatGoogleGenerativeAIError
 from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -140,22 +142,43 @@ async def _process_chat_message(
     session: AsyncSession,
 ) -> dict:
     context = await _build_chat_context(current_user=current_user, session=session)
-    return await run_agent(
-        message=current_message,
-        provider=provider,
-        api_key=api_key,
-        history=history,
-        expense_categories=context["expense_categories"],
-        income_categories=context["income_categories"],
-        expense_category_tree=context["expense_category_tree"],
-        income_category_tree=context["income_category_tree"],
-        expense_category_index=context["expense_category_index"],
-        income_category_index=context["income_category_index"],
-        expense_subcategory_index=context["expense_subcategory_index"],
-        income_subcategory_index=context["income_subcategory_index"],
-        accounts=context["accounts"],
-        account_name_to_id=context["account_name_to_id"],
-    )
+    try:
+        return await run_agent(
+            message=current_message,
+            provider=provider,
+            api_key=api_key,
+            history=history,
+            expense_categories=context["expense_categories"],
+            income_categories=context["income_categories"],
+            expense_category_tree=context["expense_category_tree"],
+            income_category_tree=context["income_category_tree"],
+            expense_category_index=context["expense_category_index"],
+            income_category_index=context["income_category_index"],
+            expense_subcategory_index=context["expense_subcategory_index"],
+            income_subcategory_index=context["income_subcategory_index"],
+            accounts=context["accounts"],
+            account_name_to_id=context["account_name_to_id"],
+        )
+    except GroqRateLimitError:
+        return {
+            "response_type": "answer",
+            "message": (
+                "Alcanzaste el límite diario de tokens de tu API key de Groq. "
+                "Podés volver a intentarlo mañana o cambiar de proveedor en Configuración."
+            ),
+            "data": None,
+        }
+    except ChatGoogleGenerativeAIError as exc:
+        if "429" in str(exc):
+            return {
+                "response_type": "answer",
+                "message": (
+                    "Alcanzaste el límite diario de tu API key de Google AI Studio. "
+                    "Podés volver a intentarlo mañana o cambiar de proveedor en Configuración."
+                ),
+                "data": None,
+            }
+        raise
 
 
 def _build_chat_response(result: dict, transcribed_text: str | None = None) -> ChatResponse:
