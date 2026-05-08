@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -16,6 +17,8 @@ from app.routers.transcribe import router as transcribe_router
 from app.routers.stats import router as stats_router
 from app.routers.subcategories import router as subcategories_router
 from app.routers.users import router as users_router
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -57,5 +60,6 @@ async def health_check():
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         return {"status": "healthy", "database": "connected"}
-    except Exception as e:
-        return {"status": "unhealthy", "database": str(e)}
+    except Exception:
+        logger.exception("Database health check failed")
+        return {"status": "unhealthy", "database": "disconnected"}
