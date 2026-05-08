@@ -5,11 +5,17 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Run Backend FastAPI Dev (uv run fastapi dev)",
-            "type": "node-terminal",
+            "name": "FastAPI Dev (debugger)",
+            "type": "debugpy",
             "request": "launch",
-            "command": "uv run fastapi dev",
-            "cwd": "${workspaceFolder}"
+            "module": "fastapi",
+            "args": ["dev", "app/main.py"],
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "jinja": true
         }
     ]
 }
