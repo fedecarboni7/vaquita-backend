@@ -25,3 +25,4 @@ class ChatResponse(BaseModel):
     message: str
     data: dict[str, Any] | None = None
     transcribed_text: str | None = None
+    fallback_model_used: bool = False

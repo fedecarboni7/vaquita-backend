@@ -19,7 +19,9 @@ class Settings(BaseSettings):
     ENCRYPTION_KEY: str = ""
     FREE_DAILY_LIMIT: int = 5
     GROQ_DEFAULT_MODEL: str = "llama-3.3-70b-versatile"
-    GOOGLE_DEFAULT_MODEL: str = "gemini-2.5-flash"
+    GOOGLE_DEFAULT_MODEL: str = "gemini-3.1-flash-lite-preview"
+    GROQ_FALLBACK_MODEL: str = "llama-3.1-8b-instant"
+    GOOGLE_FALLBACK_MODEL: str = "gemini-2.5-flash-lite"
     LANGSMITH_API_KEY: str = ""
     LANGSMITH_TRACING: bool = False
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
