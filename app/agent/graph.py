@@ -1,3 +1,4 @@
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import HumanMessage
 from langgraph.graph import END, StateGraph
 
@@ -80,6 +81,7 @@ async def run_agent(
     income_subcategory_index: dict[str, dict[str, str]] | None = None,
     accounts: list[str] | None = None,
     account_name_to_id: dict[str, str] | None = None,
+    llm_override: BaseChatModel | None = None,
 ) -> dict:
     """Run the agent graph and return response_type, message, and data.
 
@@ -108,7 +110,7 @@ async def run_agent(
                 messages.append(AIMessage(content=msg["content"]))
 
     messages.append(HumanMessage(content=message))
-    llm = get_llm(provider=provider, api_key=api_key)
+    llm = llm_override or get_llm(provider=provider, api_key=api_key)
 
     result = await _agent.ainvoke(
         {

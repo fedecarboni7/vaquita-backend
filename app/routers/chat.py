@@ -9,7 +9,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.agent.graph import run_agent
+from app.agent.llm import get_fallback_llm
 from app.auth import get_current_user
+from app.config import settings
 from app.database import get_session
 from app.models.agent_usage import UsageType
 from app.models.account import Account
@@ -18,6 +20,7 @@ from app.models.user import User
 from app.schemas.chat import ChatMessageIn, ChatRequest, ChatResponse
 from app.services.ai_access import (
     INVALID_API_KEY_MESSAGE,
+    ResolvedApiCredentials,
     is_llm_provider_auth_error,
     resolve_api_credentials,
 )
@@ -64,6 +67,10 @@ def _parse_messages_form(messages: str | None) -> list[dict] | None:
         ) from exc
 
     return [msg.model_dump() for msg in parsed_messages] if parsed_messages else None
+
+
+def _is_byok(resolved_credentials: ResolvedApiCredentials) -> bool:
+    return resolved_credentials.api_key != settings.GROQ_API_KEY
 
 
 async def _build_chat_context(current_user: User, session: AsyncSession) -> dict:
@@ -140,6 +147,7 @@ async def _process_chat_message(
     history: list[dict] | None,
     current_user: User,
     session: AsyncSession,
+    is_byok: bool,
 ) -> dict:
     context = await _build_chat_context(current_user=current_user, session=session)
     try:
@@ -160,24 +168,105 @@ async def _process_chat_message(
             account_name_to_id=context["account_name_to_id"],
         )
     except GroqRateLimitError:
-        return {
-            "response_type": "answer",
-            "message": (
-                "Alcanzaste el límite diario de tokens de tu API key de Groq. "
-                "Podés volver a intentarlo mañana o cambiar de proveedor en Configuración."
-            ),
-            "data": None,
-        }
-    except ChatGoogleGenerativeAIError as exc:
-        if "429" in str(exc):
+        if not is_byok:
             return {
                 "response_type": "answer",
                 "message": (
-                    "Alcanzaste el límite diario de tu API key de Google AI Studio. "
+                    "Alcanzaste el límite diario de tokens de tu API key de Groq. "
                     "Podés volver a intentarlo mañana o cambiar de proveedor en Configuración."
                 ),
                 "data": None,
             }
+        fallback_llm = get_fallback_llm(provider=provider, api_key=api_key)
+        if fallback_llm is None:
+            return {
+                "response_type": "answer",
+                "message": (
+                    "Alcanzaste el límite diario de tokens de tu API key de Groq. "
+                    "Podés volver a intentarlo mañana o cambiar de proveedor en Configuración."
+                ),
+                "data": None,
+            }
+        try:
+            result = await run_agent(
+                message=current_message,
+                provider=provider,
+                api_key=api_key,
+                history=history,
+                expense_categories=context["expense_categories"],
+                income_categories=context["income_categories"],
+                expense_category_tree=context["expense_category_tree"],
+                income_category_tree=context["income_category_tree"],
+                expense_category_index=context["expense_category_index"],
+                income_category_index=context["income_category_index"],
+                expense_subcategory_index=context["expense_subcategory_index"],
+                income_subcategory_index=context["income_subcategory_index"],
+                accounts=context["accounts"],
+                account_name_to_id=context["account_name_to_id"],
+                llm_override=fallback_llm,
+            )
+            result["fallback_used"] = True
+            return result
+        except GroqRateLimitError:
+            return {
+                "response_type": "answer",
+                "message": (
+                    "Alcanzaste el límite de tu modelo principal y del modelo de respaldo. Intentá de nuevo más tarde."
+                ),
+                "data": None,
+            }
+    except ChatGoogleGenerativeAIError as exc:
+        if "429" in str(exc):
+            if not is_byok:
+                return {
+                    "response_type": "answer",
+                    "message": (
+                        "Alcanzaste el límite diario de tu API key de Google AI Studio. "
+                        "Podés volver a intentarlo mañana o cambiar de proveedor en Configuración."
+                    ),
+                    "data": None,
+                }
+            fallback_llm = get_fallback_llm(provider=provider, api_key=api_key)
+            if fallback_llm is None:
+                return {
+                    "response_type": "answer",
+                    "message": (
+                        "Alcanzaste el límite diario de tu API key de Google AI Studio. "
+                        "Podés volver a intentarlo mañana o cambiar de proveedor en Configuración."
+                    ),
+                    "data": None,
+                }
+            try:
+                result = await run_agent(
+                    message=current_message,
+                    provider=provider,
+                    api_key=api_key,
+                    history=history,
+                    expense_categories=context["expense_categories"],
+                    income_categories=context["income_categories"],
+                    expense_category_tree=context["expense_category_tree"],
+                    income_category_tree=context["income_category_tree"],
+                    expense_category_index=context["expense_category_index"],
+                    income_category_index=context["income_category_index"],
+                    expense_subcategory_index=context["expense_subcategory_index"],
+                    income_subcategory_index=context["income_subcategory_index"],
+                    accounts=context["accounts"],
+                    account_name_to_id=context["account_name_to_id"],
+                    llm_override=fallback_llm,
+                )
+                result["fallback_used"] = True
+                return result
+            except ChatGoogleGenerativeAIError as fallback_exc:
+                if "429" in str(fallback_exc):
+                    return {
+                        "response_type": "answer",
+                        "message": (
+                            "Alcanzaste el límite de tu modelo principal y del modelo de respaldo. "
+                            "Intentá de nuevo más tarde."
+                        ),
+                        "data": None,
+                    }
+                raise
         raise
 
 
@@ -187,6 +276,7 @@ def _build_chat_response(result: dict, transcribed_text: str | None = None) -> C
         message=result["message"],
         data=result.get("data"),
         transcribed_text=transcribed_text,
+        fallback_model_used=result.get("fallback_used", False),
     )
 
 
@@ -212,6 +302,7 @@ async def chat(
             history=history,
             current_user=current_user,
             session=session,
+            is_byok=_is_byok(resolved_credentials),
         )
     except HTTPException:
         raise
