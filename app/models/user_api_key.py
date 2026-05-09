@@ -2,7 +2,7 @@ import enum
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, Enum, ForeignKey, Text, text
+from sqlalchemy import Enum, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -31,11 +31,5 @@ class UserApiKey(Base):
         nullable=False,
     )
     encrypted_key: Mapped[str] = mapped_column(Text, nullable=False)
-    persist: Mapped[bool] = mapped_column(
-        Boolean,
-        nullable=False,
-        default=True,
-        server_default=text("true"),
-    )
 
     user: Mapped["User"] = relationship(back_populates="api_key")

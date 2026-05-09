@@ -292,7 +292,6 @@ async def chat(
         current_user=current_user,
         session=session,
         usage_type=UsageType.chat,
-        session_api_key=body.session_api_key,
     )
     try:
         result = await _process_chat_message(

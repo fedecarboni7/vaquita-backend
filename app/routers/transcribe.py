@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import base64
-import json
 import logging
 from typing import Any
 
 from groq import AsyncGroq
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_user
@@ -17,7 +16,6 @@ from app.config import settings
 from app.database import get_session
 from app.models.agent_usage import UsageType
 from app.models.user import User
-from app.schemas.chat import SessionApiKeyPayload
 from app.services.ai_access import (
     FREE_LIMIT_REACHED_TRANSCRIBE_MESSAGE,
     INVALID_API_KEY_MESSAGE,
@@ -71,33 +69,6 @@ def _extract_response_text(content: Any) -> str:
         return "\n".join(text_parts).strip()
 
     return ""
-
-
-def _parse_session_api_key(raw_session_api_key: str | None) -> SessionApiKeyPayload | None:
-    if raw_session_api_key is None:
-        return None
-
-    try:
-        parsed_payload = json.loads(raw_session_api_key)
-    except json.JSONDecodeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Invalid session_api_key payload",
-        ) from exc
-
-    if not isinstance(parsed_payload, dict):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Invalid session_api_key payload",
-        )
-
-    try:
-        return SessionApiKeyPayload.model_validate(parsed_payload)
-    except ValidationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Invalid session_api_key payload",
-        ) from exc
 
 
 async def _transcribe_with_groq(
@@ -158,7 +129,6 @@ async def _transcribe_with_google(
 @router.post("/transcribe", response_model=TranscriptionResponse)
 async def transcribe_audio(
     audio: UploadFile = File(...),
-    session_api_key: str | None = Form(default=None),
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> TranscriptionResponse:
@@ -181,14 +151,11 @@ async def transcribe_audio(
             detail="El audio excede el tamano maximo permitido",
         )
 
-    parsed_session_api_key = _parse_session_api_key(session_api_key)
-
     try:
         resolved_credentials = await resolve_api_credentials(
             current_user=current_user,
             session=session,
             usage_type=UsageType.transcribe,
-            session_api_key=parsed_session_api_key,
             limit_reached_message=FREE_LIMIT_REACHED_TRANSCRIBE_MESSAGE,
         )
         filename = _build_filename(audio.content_type)

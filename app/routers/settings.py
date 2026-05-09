@@ -27,7 +27,6 @@ async def get_api_key_status(
 
     return ApiKeyStatusResponse(
         provider=user_api_key.provider,
-        persist=user_api_key.persist,
         has_key=True,
     )
 
@@ -41,12 +40,6 @@ async def save_api_key(
     result = await session.execute(select(UserApiKey).where(UserApiKey.user_id == current_user.id))
     existing = result.scalar_one_or_none()
 
-    if not body.persist:
-        if existing is not None:
-            await session.delete(existing)
-            await session.commit()
-        return ApiKeyStatusResponse(provider=body.provider, persist=False, has_key=False)
-
     encrypted_key = encrypt_key(body.api_key)
     if existing is None:
         existing = UserApiKey(
@@ -54,17 +47,15 @@ async def save_api_key(
             user_id=current_user.id,
             provider=body.provider,
             encrypted_key=encrypted_key,
-            persist=True,
         )
         session.add(existing)
     else:
         existing.provider = body.provider
         existing.encrypted_key = encrypted_key
-        existing.persist = True
 
     await session.commit()
 
-    return ApiKeyStatusResponse(provider=existing.provider, persist=existing.persist, has_key=True)
+    return ApiKeyStatusResponse(provider=existing.provider, has_key=True)
 
 
 @router.delete("/api-key", status_code=status.HTTP_204_NO_CONTENT)
