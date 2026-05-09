@@ -11,7 +11,6 @@ from app.config import settings
 from app.models.agent_usage import AgentUsage, UsageType
 from app.models.user import User
 from app.models.user_api_key import UserApiKey
-from app.schemas.chat import SessionApiKeyPayload
 from app.services.encryption import decrypt_key
 
 FREE_LIMIT_REACHED_AGENT_MESSAGE = (
@@ -35,7 +34,7 @@ async def _get_persisted_user_api_key(
 ) -> tuple[str, str] | None:
     result = await session.execute(select(UserApiKey).where(UserApiKey.user_id == current_user.id))
     user_api_key = result.scalar_one_or_none()
-    if user_api_key is None or not user_api_key.persist:
+    if user_api_key is None:
         return None
 
     return user_api_key.provider.value, decrypt_key(user_api_key.encrypted_key)
@@ -86,15 +85,8 @@ async def resolve_api_credentials(
     current_user: User,
     session: AsyncSession,
     usage_type: UsageType,
-    session_api_key: SessionApiKeyPayload | None = None,
     limit_reached_message: str = FREE_LIMIT_REACHED_AGENT_MESSAGE,
 ) -> ResolvedApiCredentials:
-    if session_api_key is not None:
-        return ResolvedApiCredentials(
-            provider=session_api_key.provider.value,
-            api_key=session_api_key.api_key,
-        )
-
     persisted_credentials = await _get_persisted_user_api_key(current_user=current_user, session=session)
     if persisted_credentials is not None:
         provider, api_key = persisted_credentials
