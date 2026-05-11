@@ -218,6 +218,57 @@ async def _fetch_expenses_by_category(
     ]
 
 
+async def _fetch_income_by_category(
+    session: AsyncSession,
+    *,
+    user_id,
+    month_start: date,
+    month_end: date,
+    currency: Literal["ARS", "USD"],
+) -> list[StatsCategoryExpenseItem]:
+    category_label = func.coalesce(Category.name, literal("Sin categoría"))
+    category_total = func.sum(Transaction.amount)
+    total_income_window = func.sum(func.sum(Transaction.amount)).over()
+    percentage_expr = func.round(
+        case(
+            (total_income_window == 0, 0),
+            else_=(category_total * 100.0 / total_income_window),
+        ),
+        1,
+    )
+
+    query = (
+        select(
+            category_label.label("category_name"),
+            category_total.label("total"),
+            percentage_expr.label("percentage"),
+        )
+        .select_from(Transaction)
+        .outerjoin(Category, Category.id == Transaction.category_id)
+        .where(
+            Transaction.user_id == user_id,
+            Transaction.expense_date >= month_start,
+            Transaction.expense_date <= month_end,
+            Transaction.affects_balance.is_(True),
+            Transaction.type == TransactionType.income,
+        )
+        .group_by(category_label)
+        .order_by(category_total.desc())
+    )
+    query = _apply_stats_currency_filter(query, currency=currency)
+
+    result = await session.execute(query)
+
+    return [
+        StatsCategoryExpenseItem(
+            category_name=str(row.category_name),
+            total=float(row.total),
+            percentage=float(row.percentage),
+        )
+        for row in result.all()
+    ]
+
+
 def _build_expenses_by_subcategory_query(
     *,
     user_id,
@@ -262,6 +313,50 @@ def _build_expenses_by_subcategory_query(
     return _apply_stats_currency_filter(query, currency=currency)
 
 
+def _build_income_by_subcategory_query(
+    *,
+    user_id,
+    month_start: date,
+    month_end: date,
+    currency: Literal["ARS", "USD"],
+):
+    category_label = func.coalesce(Category.name, literal("Sin categoria"))
+    subcategory_label = func.coalesce(Subcategory.name, literal("Sin subcategoria"))
+    subcategory_total = func.sum(Transaction.amount)
+    category_total_window = func.sum(func.sum(Transaction.amount)).over(partition_by=category_label)
+    percentage_expr = func.round(
+        case(
+            (category_total_window == 0, 0),
+            else_=(subcategory_total * 100.0 / category_total_window),
+        ),
+        1,
+    )
+
+    query = (
+        select(
+            category_label.label("category_name"),
+            subcategory_label.label("subcategory_name"),
+            subcategory_total.label("total"),
+            percentage_expr.label("percentage"),
+            category_total_window.label("category_total"),
+        )
+        .select_from(Transaction)
+        .outerjoin(Category, Category.id == Transaction.category_id)
+        .outerjoin(Subcategory, Subcategory.id == Transaction.subcategory_id)
+        .where(
+            Transaction.user_id == user_id,
+            Transaction.expense_date >= month_start,
+            Transaction.expense_date <= month_end,
+            Transaction.affects_balance.is_(True),
+            Transaction.type == TransactionType.income,
+        )
+        .group_by(category_label, subcategory_label)
+        .order_by(category_total_window.desc(), subcategory_total.desc())
+    )
+
+    return _apply_stats_currency_filter(query, currency=currency)
+
+
 async def _fetch_expenses_by_subcategory(
     session: AsyncSession,
     *,
@@ -271,6 +366,37 @@ async def _fetch_expenses_by_subcategory(
     currency: Literal["ARS", "USD"],
 ) -> dict[str, list[StatsSubcategoryExpenseItem]]:
     query = _build_expenses_by_subcategory_query(
+        user_id=user_id,
+        month_start=month_start,
+        month_end=month_end,
+        currency=currency,
+    )
+
+    result = await session.execute(query)
+
+    items_by_category: dict[str, list[StatsSubcategoryExpenseItem]] = {}
+    for row in result.all():
+        category_name = str(row.category_name)
+        items_by_category.setdefault(category_name, []).append(
+            StatsSubcategoryExpenseItem(
+                subcategory_name=str(row.subcategory_name),
+                total=float(row.total),
+                percentage=float(row.percentage),
+            )
+        )
+
+    return items_by_category
+
+
+async def _fetch_income_by_subcategory(
+    session: AsyncSession,
+    *,
+    user_id,
+    month_start: date,
+    month_end: date,
+    currency: Literal["ARS", "USD"],
+) -> dict[str, list[StatsSubcategoryExpenseItem]]:
+    query = _build_income_by_subcategory_query(
         user_id=user_id,
         month_start=month_start,
         month_end=month_end,
@@ -347,6 +473,20 @@ async def get_stats(
         month_end=requested_month_end,
         currency=currency,
     )
+    income_by_category = await _fetch_income_by_category(
+        session,
+        user_id=current_user.id,
+        month_start=requested_month_start,
+        month_end=requested_month_end,
+        currency=currency,
+    )
+    income_by_subcategory = await _fetch_income_by_subcategory(
+        session,
+        user_id=current_user.id,
+        month_start=requested_month_start,
+        month_end=requested_month_end,
+        currency=currency,
+    )
 
     summary = StatsSummaryResponse(
         total_income=total_income,
@@ -363,4 +503,6 @@ async def get_stats(
         monthly_series=monthly_series,
         expenses_by_category=expenses_by_category,
         expenses_by_subcategory=expenses_by_subcategory,
+        income_by_category=income_by_category,
+        income_by_subcategory=income_by_subcategory,
     )
