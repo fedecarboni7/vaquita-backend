@@ -1,4 +1,5 @@
 from datetime import date
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -7,6 +8,7 @@ from sqlalchemy import select
 from app.models.transaction import Transaction
 from app.routers.stats import (
     _apply_stats_currency_filter,
+    _build_expenses_by_subcategory_query,
     _compute_delta_pct,
     _month_bounds,
     _month_key,
@@ -61,3 +63,20 @@ def test_apply_stats_currency_filter_adds_join_and_currency_predicate() -> None:
 
     assert "JOIN accounts" in compiled
     assert "accounts.currency" in compiled
+
+
+def test_build_expenses_by_subcategory_query_groups_and_partitions() -> None:
+    query = _build_expenses_by_subcategory_query(
+        user_id=uuid4(),
+        month_start=date(2026, 4, 1),
+        month_end=date(2026, 4, 30),
+        currency="ARS",
+    )
+
+    compiled = str(query)
+
+    assert "LEFT OUTER JOIN categories" in compiled
+    assert "LEFT OUTER JOIN subcategories" in compiled
+    assert "GROUP BY" in compiled
+    assert "OVER (PARTITION BY" in compiled
+    assert "transactions.type" in compiled

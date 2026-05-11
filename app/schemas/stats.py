@@ -23,8 +23,15 @@ class StatsCategoryExpenseItem(BaseModel):
     percentage: float
 
 
+class StatsSubcategoryExpenseItem(BaseModel):
+    subcategory_name: str
+    total: float
+    percentage: float
+
+
 class StatsResponse(BaseModel):
     month: str
     summary: StatsSummaryResponse
     monthly_series: list[StatsMonthlySeriesItem]
     expenses_by_category: list[StatsCategoryExpenseItem]
+    expenses_by_subcategory: dict[str, list[StatsSubcategoryExpenseItem]]
