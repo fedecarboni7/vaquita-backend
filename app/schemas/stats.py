@@ -35,3 +35,5 @@ class StatsResponse(BaseModel):
     monthly_series: list[StatsMonthlySeriesItem]
     expenses_by_category: list[StatsCategoryExpenseItem]
     expenses_by_subcategory: dict[str, list[StatsSubcategoryExpenseItem]]
+    income_by_category: list[StatsCategoryExpenseItem]
+    income_by_subcategory: dict[str, list[StatsSubcategoryExpenseItem]]
