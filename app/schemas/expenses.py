@@ -23,6 +23,7 @@ class TransactionCreate(BaseModel):
     account_destination_id: uuid.UUID | None = None
     to_amount: float | None = None
     affects_balance: bool = True
+    chat_thread_id: uuid.UUID | None = None
 
     @field_validator("currency", mode="before")
     @classmethod
