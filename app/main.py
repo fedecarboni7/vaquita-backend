@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Vaquita API",
+    title="vaquita API",
     description="AI-powered expenses tracker backend",
     version="0.1.0",
     lifespan=lifespan,
