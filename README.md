@@ -1,6 +1,6 @@
-# Vaquita — Backend
+# vaquita — Backend
 
-Backend de [Vaquita](https://vaquita.up.railway.app), una app de finanzas personales con IA integrada. Los usuarios registran transacciones en lenguaje natural a través de un chat, y el agente interpreta, estructura y persiste la información automáticamente.
+Backend de [vaquita](https://vaquita.up.railway.app), una app de finanzas personales con IA integrada. Los usuarios registran transacciones en lenguaje natural a través de un chat, y el agente interpreta, estructura y persiste la información automáticamente.
 
 ---
 
