@@ -1,10 +1,11 @@
 import json
+import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from groq import RateLimitError as GroqRateLimitError
 from langchain_google_genai.chat_models import ChatGoogleGenerativeAIError
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -16,8 +17,18 @@ from app.database import get_session
 from app.models.agent_usage import UsageType
 from app.models.account import Account
 from app.models.category import Category
+from app.models.chat_interaction import ChatInteraction
+from app.models.transaction import Transaction
 from app.models.user import User
-from app.schemas.chat import ChatMessageIn, ChatRequest, ChatResponse
+from app.schemas.chat import (
+    ChatMessageIn,
+    ChatRequest,
+    ChatResponse,
+    ChatThreadDetailResponse,
+    ChatThreadInteraction,
+    ChatThreadSummary,
+    ChatThreadsResponse,
+)
 from app.services.ai_access import (
     INVALID_API_KEY_MESSAGE,
     ResolvedApiCredentials,
@@ -270,13 +281,19 @@ async def _process_chat_message(
         raise
 
 
-def _build_chat_response(result: dict, transcribed_text: str | None = None) -> ChatResponse:
+def _build_chat_response(
+    result: dict,
+    *,
+    transcribed_text: str | None = None,
+    thread_id: uuid.UUID | None = None,
+) -> ChatResponse:
     return ChatResponse(
         response_type=result["response_type"],
         message=result["message"],
         data=result.get("data"),
         transcribed_text=transcribed_text,
         fallback_model_used=result.get("fallback_used", False),
+        thread_id=thread_id,
     )
 
 
@@ -288,6 +305,7 @@ async def chat(
 ) -> ChatResponse:
     """Run the user message through the AI agent."""
     current_message, history = _split_current_and_history(body.messages)
+    resolved_thread_id = body.thread_id or uuid.uuid4()
     resolved_credentials = await resolve_api_credentials(
         current_user=current_user,
         session=session,
@@ -313,4 +331,136 @@ async def chat(
             ) from exc
         raise
 
-    return _build_chat_response(result)
+    session.add(
+        ChatInteraction(
+            user_id=current_user.id,
+            thread_id=resolved_thread_id,
+            user_message=current_message,
+            agent_reply=result["message"],
+        )
+    )
+    await session.commit()
+
+    return _build_chat_response(result, thread_id=resolved_thread_id)
+
+
+@router.get("/threads", response_model=ChatThreadsResponse)
+async def list_chat_threads(
+    q: str | None = Query(None),
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ChatThreadsResponse:
+    base_query = select(
+        ChatInteraction.thread_id.label("thread_id"),
+        func.min(ChatInteraction.created_at).label("started_at"),
+        func.count(ChatInteraction.id).label("interaction_count"),
+    ).where(ChatInteraction.user_id == current_user.id)
+
+    if q and q.strip():
+        search_term = f"%{q.strip()}%"
+        base_query = base_query.where(
+            or_(
+                ChatInteraction.user_message.ilike(search_term),
+                ChatInteraction.agent_reply.ilike(search_term),
+            )
+        )
+
+    thread_subquery = base_query.group_by(ChatInteraction.thread_id).subquery()
+    transactions_count = (
+        select(func.count(Transaction.id))
+        .where(
+            Transaction.user_id == current_user.id,
+            Transaction.chat_thread_id == thread_subquery.c.thread_id,
+        )
+        .scalar_subquery()
+    )
+
+    query = select(
+        thread_subquery.c.thread_id,
+        thread_subquery.c.started_at,
+        thread_subquery.c.interaction_count,
+        transactions_count.label("transactions_created"),
+    ).order_by(thread_subquery.c.started_at.desc())
+
+    result = await session.execute(query)
+    threads = [
+        ChatThreadSummary(
+            thread_id=row.thread_id,
+            started_at=row.started_at,
+            interaction_count=row.interaction_count,
+            transactions_created=row.transactions_created or 0,
+        )
+        for row in result.all()
+    ]
+    return ChatThreadsResponse(threads=threads)
+
+
+@router.get("/threads/{thread_id}", response_model=ChatThreadDetailResponse)
+async def get_chat_thread(
+    thread_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ChatThreadDetailResponse:
+    exists_result = await session.execute(
+        select(ChatInteraction.id)
+        .where(
+            ChatInteraction.user_id == current_user.id,
+            ChatInteraction.thread_id == thread_id,
+        )
+        .limit(1)
+    )
+    if exists_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversacion no encontrada",
+        )
+
+    interactions_result = await session.execute(
+        select(ChatInteraction)
+        .where(
+            ChatInteraction.user_id == current_user.id,
+            ChatInteraction.thread_id == thread_id,
+        )
+        .order_by(ChatInteraction.created_at.asc())
+    )
+
+    interactions = [
+        ChatThreadInteraction(
+            id=interaction.id,
+            user_message=interaction.user_message,
+            agent_reply=interaction.agent_reply,
+            created_at=interaction.created_at,
+        )
+        for interaction in interactions_result.scalars().all()
+    ]
+    return ChatThreadDetailResponse(thread_id=thread_id, interactions=interactions)
+
+
+@router.delete("/threads/{thread_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_chat_thread(
+    thread_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    exists_result = await session.execute(
+        select(ChatInteraction.id)
+        .where(
+            ChatInteraction.user_id == current_user.id,
+            ChatInteraction.thread_id == thread_id,
+        )
+        .limit(1)
+    )
+    if exists_result.scalar_one_or_none() is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversacion no encontrada",
+        )
+
+    await session.execute(
+        delete(ChatInteraction).where(
+            ChatInteraction.user_id == current_user.id,
+            ChatInteraction.thread_id == thread_id,
+        )
+    )
+    await session.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

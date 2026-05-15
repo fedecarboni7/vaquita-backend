@@ -66,6 +66,7 @@ def _build_transaction(
     to_amount: Decimal | None,
     affects_balance: bool,
     expense_date: date,
+    chat_thread_id: uuid.UUID | None,
 ) -> Transaction:
     return Transaction(
         id=uuid.uuid4(),
@@ -83,6 +84,7 @@ def _build_transaction(
         to_amount=to_amount,
         affects_balance=affects_balance,
         expense_date=expense_date,
+        chat_thread_id=chat_thread_id,
     )
 
 
@@ -399,6 +401,7 @@ async def create_expense(
                     to_amount=None,
                     affects_balance=body.affects_balance,
                     expense_date=_add_months(body.expense_date, index),
+                    chat_thread_id=body.chat_thread_id,
                 )
             )
 
@@ -420,6 +423,7 @@ async def create_expense(
             to_amount=transfer_to_amount,
             affects_balance=body.affects_balance,
             expense_date=body.expense_date,
+            chat_thread_id=body.chat_thread_id,
         )
         session.add(transaction)
         created_transaction_id = transaction.id

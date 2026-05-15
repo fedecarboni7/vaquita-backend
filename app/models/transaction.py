@@ -96,6 +96,10 @@ class Transaction(Base):
         nullable=True,
         index=True,
     )
+    chat_thread_id: Mapped[uuid.UUID | None] = mapped_column(
+        nullable=True,
+        index=True,
+    )
     expense_date: Mapped[date] = mapped_column(
         Date,
         nullable=False,
