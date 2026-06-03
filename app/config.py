@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str = ""
     JWT_SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRATION_MINUTES: int = 1440  # 24 hours
+    JWT_EXPIRATION_MINUTES: int = 43200  # 30 days
     DEV_AUTH_MODE: bool = False
     FRONTEND_URL: str = "http://localhost:5173"
     GROQ_API_KEY: str = ""
