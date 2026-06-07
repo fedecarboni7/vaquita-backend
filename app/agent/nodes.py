@@ -29,7 +29,10 @@ def classify(state: AgentState) -> dict:
     """Classify user intent using the LLM."""
     llm = _get_runtime_llm(state).with_structured_output(ClassifierOutput)
 
-    system_msg = SystemMessage(content=CLASSIFIER_PROMPT.format(today=date.today().isoformat()))
+    accounts = state.get("accounts", [])
+    acc_text = ", ".join(accounts) if accounts else "No hay cuentas definidas."
+
+    system_msg = SystemMessage(content=CLASSIFIER_PROMPT.format(accounts=acc_text))
     messages = [system_msg, *state["messages"]]
     result: ClassifierOutput = llm.invoke(messages)
 
