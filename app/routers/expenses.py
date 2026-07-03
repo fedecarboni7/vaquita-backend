@@ -1,11 +1,14 @@
 import logging
 import uuid
+import csv
+import io
 from calendar import monthrange
 from datetime import date
 from decimal import Decimal, ROUND_FLOOR
 
 import filetype
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -249,6 +252,88 @@ def _apply_list_expenses_filters(
         base_query = base_query.where(Transaction.type == legacy_type)
 
     return base_query
+
+
+def _format_csv_decimal(value: Decimal | float | int | None) -> str:
+    if value is None:
+        return ""
+
+    return f"{Decimal(str(value)).quantize(MONEY_SCALE):.2f}"
+
+
+def _build_transactions_csv_rows(transactions: list[Transaction]) -> str:
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(
+        [
+            "date",
+            "type",
+            "amount",
+            "currency",
+            "account_name",
+            "category_name",
+            "subcategory_name",
+            "account_destination_name",
+            "to_amount",
+            "to_currency",
+            "description",
+        ]
+    )
+
+    for transaction in transactions:
+        is_transfer = transaction.type == TransactionType.transfer
+        writer.writerow(
+            [
+                transaction.expense_date.isoformat(),
+                transaction.type.value,
+                _format_csv_decimal(transaction.amount),
+                transaction.currency,
+                transaction.account or "",
+                "" if is_transfer else (transaction.category_name or ""),
+                "" if is_transfer else (transaction.subcategory_name or ""),
+                transaction.account_destination if is_transfer else "",
+                _format_csv_decimal(transaction.to_amount) if is_transfer else "",
+                transaction.account_destination_currency if (is_transfer and transaction.to_amount is not None) else "",
+                transaction.description or "",
+            ]
+        )
+
+    return output.getvalue()
+
+
+async def _get_transactions_for_export(
+    session: AsyncSession,
+    current_user: User,
+) -> list[Transaction]:
+    result = await session.execute(
+        select(Transaction)
+        .options(
+            selectinload(Transaction.subcategory),
+            selectinload(Transaction.category),
+            selectinload(Transaction.source_account),
+            selectinload(Transaction.destination_account),
+        )
+        .where(Transaction.user_id == current_user.id)
+        .order_by(Transaction.expense_date.asc(), Transaction.created_at.asc())
+    )
+    return list(result.scalars().all())
+
+
+@router.get("/export")
+async def export_expenses_csv(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    transactions = await _get_transactions_for_export(session, current_user)
+    csv_content = _build_transactions_csv_rows(transactions)
+    filename = f"transactions-{date.today().isoformat()}.csv"
+
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("", response_model=PaginatedTransactionsResponse)
