@@ -57,6 +57,11 @@ app.include_router(stats_router)
 app.include_router(users_router)
 
 
+@app.get("/ping")
+async def ping():
+    return {"status": "ok"}
+
+
 @app.get("/health")
 async def health_check():
     try:
