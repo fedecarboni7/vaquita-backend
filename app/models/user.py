@@ -11,7 +11,6 @@ if TYPE_CHECKING:
     from app.models.agent_usage import AgentUsage
     from app.models.account import Account
     from app.models.category import Category
-    from app.models.chat_interaction import ChatInteraction
     from app.models.subcategory import Subcategory
     from app.models.transaction import Transaction
     from app.models.user_api_key import UserApiKey
@@ -69,8 +68,5 @@ class User(Base):
         uselist=False,
     )
     agent_usage_entries: Mapped[list["AgentUsage"]] = relationship(
-        back_populates="user",
-    )
-    chat_interactions: Mapped[list["ChatInteraction"]] = relationship(
         back_populates="user",
     )

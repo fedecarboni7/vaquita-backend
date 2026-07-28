@@ -430,7 +430,6 @@ async def confirm_import(
             to_amount=row["to_amount"],
             affects_balance=True,
             expense_date=row["date"],
-            chat_thread_id=None,
         )
         session.add(transaction)
         created_count += 1
