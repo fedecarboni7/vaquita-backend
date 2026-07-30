@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 class CategoryCreate(BaseModel):
     name: str
     type: Literal["expense", "income"] = "expense"
+    emoji: str | None = None
+    color: str | None = None
 
     @field_validator("name")
     @classmethod
@@ -38,6 +40,8 @@ class CategoryUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str | None = None
+    emoji: str | None = None
+    color: str | None = None
 
     @field_validator("name")
     @classmethod
@@ -84,6 +88,8 @@ class CategoryResponse(BaseModel):
     id: uuid.UUID
     name: str
     type: str
+    emoji: str | None = None
+    color: str | None = None
     created_at: datetime
 
 

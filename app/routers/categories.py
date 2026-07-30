@@ -54,6 +54,8 @@ async def create_category(
         user_id=current_user.id,
         name=body.name,
         type=body.type,
+        emoji=body.emoji,
+        color=body.color,
     )
     session.add(category)
     try:
@@ -93,34 +95,38 @@ async def update_category(
     if not category or category.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Categoria no encontrada")
 
-    if body.name is None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="El nombre es requerido",
-        )
+    name_changed = (
+        "name" in body.model_fields_set and body.name is not None and body.name.strip() != category.name.strip()
+    )
+    emoji_changed = "emoji" in body.model_fields_set and body.emoji != category.emoji
+    color_changed = "color" in body.model_fields_set and body.color != category.color
 
-    trimmed_name = body.name.strip()
-    current_trimmed = category.name.strip()
-    if trimmed_name == current_trimmed:
+    if not name_changed and not emoji_changed and not color_changed:
         return category
 
-    normalized_name = trimmed_name.lower()
-
-    existing = await session.execute(
-        select(Category.id).where(
-            Category.user_id == current_user.id,
-            Category.id != category.id,
-            Category.type == category.type,
-            func.lower(func.btrim(Category.name)) == normalized_name,
+    if name_changed:
+        normalized_name = body.name.strip().lower()
+        existing = await session.execute(
+            select(Category.id).where(
+                Category.user_id == current_user.id,
+                Category.id != category.id,
+                Category.type == category.type,
+                func.lower(func.btrim(Category.name)) == normalized_name,
+            )
         )
-    )
-    if existing.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Ya existe una categoria con ese nombre",
-        )
+        if existing.scalar_one_or_none():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Ya existe una categoria con ese nombre",
+            )
+        category.name = body.name
 
-    category.name = body.name
+    if emoji_changed:
+        category.emoji = body.emoji
+
+    if color_changed:
+        category.color = body.color
+
     try:
         await session.commit()
     except IntegrityError:
