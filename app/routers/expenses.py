@@ -9,7 +9,7 @@ from decimal import Decimal, ROUND_FLOOR
 import filetype
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, literal, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -332,6 +332,18 @@ async def export_expenses_csv(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/available-months", response_model=list[str])
+async def get_available_months(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[str]:
+    month_bucket = func.date_trunc(literal("month"), Transaction.expense_date)
+    result = await session.execute(
+        select(month_bucket).where(Transaction.user_id == current_user.id).order_by(month_bucket).distinct()
+    )
+    return [bucket.strftime("%Y-%m") for bucket in result.scalars()]
 
 
 @router.get("", response_model=PaginatedTransactionsResponse)
