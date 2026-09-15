@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_user
 from app.database import get_session
+from app.models.budget import Budget
 from app.models.category import Category
 from app.models.user import User
 from app.schemas.categories import CategoryCreate, CategoryResponse, CategoryUpdate, CategoryWithSubcategoriesResponse
@@ -79,6 +80,13 @@ async def delete_category(
     category = await session.get(Category, category_id)
     if not category or category.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Categoria no encontrada")
+
+    budget_result = await session.execute(select(Budget.id).where(Budget.category_id == category_id))
+    if budget_result.scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No se puede eliminar la categoria porque tiene un presupuesto activo",
+        )
 
     await session.delete(category)
     await session.commit()

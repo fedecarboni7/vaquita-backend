@@ -9,6 +9,7 @@ from app.config import settings
 from app.database import engine
 from app.routers.accounts import router as accounts_router
 from app.routers.auth import router as auth_router
+from app.routers.budgets import router as budgets_router
 from app.routers.categories import router as categories_router
 from app.routers.chat import router as chat_router
 from app.routers.expenses import router as expenses_router
@@ -46,6 +47,7 @@ app.add_middleware(
 
 app.include_router(accounts_router)
 app.include_router(auth_router)
+app.include_router(budgets_router)
 app.include_router(categories_router)
 app.include_router(subcategories_router)
 app.include_router(chat_router)
