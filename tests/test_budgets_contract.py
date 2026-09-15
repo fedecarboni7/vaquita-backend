@@ -246,3 +246,34 @@ async def test_subcategory_delete_is_blocked_by_budget() -> None:
             headers=headers,
         )
         assert allowed_response.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_category_delete_is_blocked_by_budget() -> None:
+    user = await _create_user("budget-category-delete-guard")
+    category = await _create_category(user.id)
+    token = create_access_token(user.id)
+    headers = {"Authorization": f"Bearer {token}"}
+
+    async with async_session_factory() as session:
+        budget = Budget(
+            id=uuid4(),
+            user_id=user.id,
+            category_id=category.id,
+            amount=Decimal("100.00"),
+            currency="ARS",
+        )
+        session.add(budget)
+        await session.commit()
+        await session.refresh(budget)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        blocked_response = await client.delete(f"/categories/{category.id}", headers=headers)
+        assert blocked_response.status_code == 400
+        assert (
+            blocked_response.json()["detail"] == "No se puede eliminar la categoria porque tiene un presupuesto activo"
+        )
+
+        await client.delete(f"/budgets/{budget.id}", headers=headers)
+        allowed_response = await client.delete(f"/categories/{category.id}", headers=headers)
+        assert allowed_response.status_code == 204
