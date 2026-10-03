@@ -48,7 +48,7 @@ async def verify_google_token(credential: str) -> dict:
     except JWTError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Invalid Google credential: {e}",
+            detail=f"La credencial de Google no es válida: {e}",
         ) from e
 
     return payload
@@ -71,7 +71,7 @@ async def get_current_user(
     """FastAPI dependency that extracts and validates the current user from the JWT."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
+        detail="No se pudieron validar las credenciales",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:

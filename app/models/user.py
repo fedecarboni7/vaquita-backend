@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import Boolean, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -29,12 +29,14 @@ class User(Base):
         nullable=False,
         index=True,
     )
-    google_id: Mapped[str] = mapped_column(
+    google_id: Mapped[str | None] = mapped_column(
         String(255),
         unique=True,
-        nullable=False,
+        nullable=True,
         index=True,
     )
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
     display_name: Mapped[str | None] = mapped_column(
         String(100),
         nullable=True,
@@ -70,3 +72,7 @@ class User(Base):
     agent_usage_entries: Mapped[list["AgentUsage"]] = relationship(
         back_populates="user",
     )
+
+    @property
+    def has_password(self) -> bool:
+        return self.password_hash is not None
