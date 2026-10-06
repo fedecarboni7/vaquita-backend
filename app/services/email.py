@@ -11,7 +11,7 @@ EmailSender = Callable[[str, str, str, str], Awaitable[None]]
 
 async def send_email(to: str, subject: str, html: str, text: str) -> None:
     if not settings.BREVO_API_KEY:
-        logger.info("Email local: asunto=%s texto=%s", subject, text)
+        logger.warning("[DEV EMAIL] asunto=%s texto=%s", subject, text)
         return
 
     payload = {

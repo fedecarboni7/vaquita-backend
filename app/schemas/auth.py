@@ -10,7 +10,6 @@ class GoogleAuthRequest(BaseModel):
 class RegisterRequest(BaseModel):
     email: str
     password: str = Field(min_length=8, max_length=128)
-    name: str | None = None
 
 
 class EmailRequest(BaseModel):

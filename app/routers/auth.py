@@ -115,7 +115,7 @@ async def register(
     if user is None:
         user = User(
             email=email,
-            display_name=body.name,
+            display_name=email.split("@", 1)[0] or email,
             password_hash=await hash_password(body.password),
             email_verified=False,
         )

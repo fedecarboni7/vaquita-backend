@@ -10,8 +10,8 @@ os.environ.setdefault("R2_BUCKET_NAME", "test-bucket")
 
 @pytest_asyncio.fixture(autouse=True)
 async def reset_database_engine():
-	from app.database import engine
+    from app.database import engine
 
-	await engine.dispose()
-	yield
-	await engine.dispose()
+    await engine.dispose()
+    yield
+    await engine.dispose()
