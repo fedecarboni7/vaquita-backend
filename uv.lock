@@ -388,18 +388,6 @@ wheels = [
 ]
 
 [[package]]
-name = "ecdsa"
-version = "0.19.1"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "six" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/c0/1f/924e3caae75f471eae4b26bd13b698f6af2c44279f67af317439c2f4c46a/ecdsa-0.19.1.tar.gz", hash = "sha256:478cba7b62555866fcb3bb3fe985e06decbdb68ef55713c4e5ab98c57d508e61", size = 201793, upload-time = "2025-03-13T11:52:43.25Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/cb/a3/460c57f094a4a165c84a1341c373b0a4f5ec6ac244b998d5021aade89b77/ecdsa-0.19.1-py2.py3-none-any.whl", hash = "sha256:30638e27cf77b7e15c4c4cc1973720149e1033827cfd00661ca5c8cc0cdb24c3", size = 150607, upload-time = "2025-03-13T11:52:41.757Z" },
-]
-
-[[package]]
 name = "email-validator"
 version = "2.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1405,6 +1393,20 @@ wheels = [
 ]
 
 [[package]]
+name = "pyjwt"
+version = "2.15.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/43/ea/5194e52748b0da83d71e082d75496eaec6e58f419f5e184786ded517e6a9/pyjwt-2.15.1.tar.gz", hash = "sha256:4f259e80cdfb6b3fc18a7de51fd1ef9ec79652f25019bae68975ca2468a34df8", size = 121252, upload-time = "2026-09-28T18:40:42.598Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/50/ca/44de4e75f8aadc457f0634be3b542815078ded46dca30efb960edeecad6e/pyjwt-2.15.1-py3-none-any.whl", hash = "sha256:42d59d631f7768a1028a64c7ff581a9bf7519804daf91fc5b6c56e30eec5e193", size = 33860, upload-time = "2026-09-28T18:40:41.429Z" },
+]
+
+[package.optional-dependencies]
+crypto = [
+    { name = "cryptography" },
+]
+
+[[package]]
 name = "pytest"
 version = "9.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1452,25 +1454,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/82/ed/0301aeeac3e5353ef3d94b6ec08bbcabd04a72018415dcb29e588514bba8/python_dotenv-1.2.2.tar.gz", hash = "sha256:2c371a91fbd7ba082c2c1dc1f8bf89ca22564a087c2c287cd9b662adde799cf3", size = 50135, upload-time = "2026-03-01T16:00:26.196Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0b/d7/1959b9648791274998a9c3526f6d0ec8fd2233e4d4acce81bbae76b44b2a/python_dotenv-1.2.2-py3-none-any.whl", hash = "sha256:1d8214789a24de455a8b8bd8ae6fe3c6b69a5e3d64aa8a8e5d68e694bbcb285a", size = 22101, upload-time = "2026-03-01T16:00:25.09Z" },
-]
-
-[[package]]
-name = "python-jose"
-version = "3.5.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "ecdsa" },
-    { name = "pyasn1" },
-    { name = "rsa" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/c6/77/3a1c9039db7124eb039772b935f2244fbb73fc8ee65b9acf2375da1c07bf/python_jose-3.5.0.tar.gz", hash = "sha256:fb4eaa44dbeb1c26dcc69e4bd7ec54a1cb8dd64d3b4d81ef08d90ff453f2b01b", size = 92726, upload-time = "2025-05-28T17:31:54.288Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d9/c3/0bd11992072e6a1c513b16500a5d07f91a24017c5909b02c72c62d7ad024/python_jose-3.5.0-py2.py3-none-any.whl", hash = "sha256:abd1202f23d34dfad2c3d28cb8617b90acf34132c7afd60abd0b0b7d3cb55771", size = 34624, upload-time = "2025-05-28T17:31:52.802Z" },
-]
-
-[package.optional-dependencies]
-cryptography = [
-    { name = "cryptography" },
 ]
 
 [[package]]
@@ -2097,7 +2080,7 @@ dependencies = [
     { name = "langchain-openai" },
     { name = "langgraph" },
     { name = "pydantic-settings" },
-    { name = "python-jose", extra = ["cryptography"] },
+    { name = "pyjwt", extra = ["crypto"] },
     { name = "sqlalchemy" },
 ]
 
@@ -2126,7 +2109,7 @@ requires-dist = [
     { name = "langchain-openai", specifier = ">=1.1.14" },
     { name = "langgraph", specifier = ">=1.0.10" },
     { name = "pydantic-settings", specifier = ">=2.14.2" },
-    { name = "python-jose", extras = ["cryptography"], specifier = ">=3.5.0" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.10.1" },
     { name = "sqlalchemy", specifier = ">=2.0.48" },
 ]
 
