@@ -3,7 +3,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.auth_token import AuthToken
@@ -46,10 +46,10 @@ async def issue_token(session: AsyncSession, user_id: uuid.UUID, purpose: str) -
 
 
 async def consume_token(session: AsyncSession, raw_token: str, purpose: str) -> AuthToken | None:
-    from sqlalchemy import select
-
     result = await session.execute(
-        select(AuthToken).where(AuthToken.token_hash == hash_token(raw_token), AuthToken.purpose == purpose)
+        select(AuthToken)
+        .where(AuthToken.token_hash == hash_token(raw_token), AuthToken.purpose == purpose)
+        .with_for_update()
     )
     token = result.scalar_one_or_none()
     now = datetime.now(timezone.utc)

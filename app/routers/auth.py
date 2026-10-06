@@ -73,8 +73,17 @@ async def google_auth(
     email = normalize_email(google_payload.get("email", ""))
     display_name = google_payload.get("name")
 
-    result = await session.execute(select(User).where(func.lower(User.email) == email))
+    result = await session.execute(select(User).where(User.google_id == google_id))
     user = result.scalar_one_or_none()
+
+    if user is None:
+        result = await session.execute(select(User).where(func.lower(User.email) == email))
+        user = result.scalar_one_or_none()
+        if user is not None and user.google_id is not None and user.google_id != google_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Este email ya está vinculado a otra cuenta de Google",
+            )
 
     if user is None:
         user = User(
@@ -159,7 +168,7 @@ async def resend_verification(
 ):
     email = normalize_email(body.email)
     await enforce_auth_rate_limit(request, email, "resend-verification")
-    result = await session.execute(select(User).where(User.email == email, User.email_verified.is_(False)))
+    result = await session.execute(select(User).where(func.lower(User.email) == email, User.email_verified.is_(False)))
     user = result.scalar_one_or_none()
     if user is not None:
         raw_token = await issue_token(session, user.id, EMAIL_VERIFICATION_PURPOSE)
@@ -172,7 +181,7 @@ async def resend_verification(
 async def login(body: LoginRequest, request: Request, session: AsyncSession = Depends(get_session)):
     email = normalize_email(body.email)
     await enforce_auth_rate_limit(request, email, "login")
-    result = await session.execute(select(User).where(User.email == email))
+    result = await session.execute(select(User).where(func.lower(User.email) == email))
     user = result.scalar_one_or_none()
     if user is None or user.password_hash is None:
         await verify_dummy_password(body.password)
@@ -197,7 +206,7 @@ async def forgot_password(
 ):
     email = normalize_email(body.email)
     await enforce_auth_rate_limit(request, email, "forgot-password")
-    result = await session.execute(select(User).where(User.email == email))
+    result = await session.execute(select(User).where(func.lower(User.email) == email))
     user = result.scalar_one_or_none()
     if user is not None:
         raw_token = await issue_token(session, user.id, PASSWORD_RESET_PURPOSE)

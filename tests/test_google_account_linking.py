@@ -9,8 +9,14 @@ from app.models.user import User
 from app.routers import auth
 
 
-async def create_user(email: str, *, verified: bool, password_hash: str | None = None) -> User:
-    user = User(email=email, google_id=None, email_verified=verified, password_hash=password_hash)
+async def create_user(
+    email: str,
+    *,
+    verified: bool,
+    password_hash: str | None = None,
+    google_id: str | None = None,
+) -> User:
+    user = User(email=email, google_id=google_id, email_verified=verified, password_hash=password_hash)
     async with async_session_factory() as session:
         session.add(user)
         await session.commit()
@@ -56,3 +62,54 @@ async def test_google_login_clears_unverified_password_before_linking(monkeypatc
     assert linked is not None
     assert linked.email_verified is True
     assert linked.password_hash is None
+
+
+@pytest.mark.asyncio
+async def test_google_login_finds_user_by_google_id_when_email_changed(monkeypatch):
+    original_email = f"original-{uuid4()}@example.com"
+    google_id = f"google-{uuid4()}"
+    user = await create_user(original_email, verified=True, google_id=google_id)
+
+    async def fake_verify(_credential):
+        return {
+            "sub": google_id,
+            "email": f"changed-{uuid4()}@example.com",
+            "email_verified": True,
+            "name": "Google User",
+        }
+
+    monkeypatch.setattr(auth, "verify_google_token", fake_verify)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/auth/google", json={"credential": "credential"})
+
+    assert response.status_code == 200
+    async with async_session_factory() as session:
+        linked = await session.get(User, user.id)
+    assert linked is not None
+    assert linked.email == original_email
+
+
+@pytest.mark.asyncio
+async def test_google_login_rejects_different_google_id_for_existing_email(monkeypatch):
+    email = f"already-linked-{uuid4()}@example.com"
+    existing_google_id = f"google-existing-{uuid4()}"
+    user = await create_user(email, verified=True, google_id=existing_google_id)
+
+    async def fake_verify(_credential):
+        return {
+            "sub": f"google-other-{uuid4()}",
+            "email": email,
+            "email_verified": True,
+            "name": "Impostor",
+        }
+
+    monkeypatch.setattr(auth, "verify_google_token", fake_verify)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/auth/google", json={"credential": "credential"})
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Este email ya está vinculado a otra cuenta de Google"
+    async with async_session_factory() as session:
+        unchanged = await session.get(User, user.id)
+    assert unchanged is not None
+    assert unchanged.google_id == existing_google_id

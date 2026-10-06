@@ -1,4 +1,3 @@
-- **Auth** | python-jose (JWT) + Google OAuth + email y contraseña |
 # vaquita — Backend
 
 Backend de [vaquita](https://vaquita.up.railway.app), una app de finanzas personales con IA integrada. Los usuarios registran transacciones en lenguaje natural a través de un chat, y el agente interpreta, estructura y persiste la información automáticamente.
@@ -28,7 +27,7 @@ Backend de [vaquita](https://vaquita.up.railway.app), una app de finanzas person
 | Orquestación de IA | LangChain + LangGraph |
 | LLM | Gemini / Groq (configurable por usuario) |
 | Transcripción de audio | Whisper vía Groq / Gemini |
-| Auth | python-jose (JWT) + Google OAuth |
+| Auth | python-jose (JWT) + Google OAuth + email y contraseña |
 | Linting / formato | Ruff |
 | Tests | pytest + pytest-asyncio |
 
