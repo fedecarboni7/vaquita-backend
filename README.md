@@ -27,7 +27,7 @@ Backend de [vaquita](https://vaquita.up.railway.app), una app de finanzas person
 | Orquestación de IA | LangChain + LangGraph |
 | LLM | Gemini / Groq (configurable por usuario) |
 | Transcripción de audio | Whisper vía Groq / Gemini |
-| Auth | python-jose (JWT) + Google OAuth |
+| Auth | python-jose (JWT) + Google OAuth + email y contraseña |
 | Linting / formato | Ruff |
 | Tests | pytest + pytest-asyncio |
 
@@ -63,6 +63,12 @@ uv run fastapi dev
 ```bash
 docker compose up
 ```
+
+### Autenticación por email
+
+Además de Google, la API permite registrarse e iniciar sesión con email y contraseña. Los registros nuevos deben verificar su email; también se pueden recuperar contraseñas mediante un link de un solo uso.
+
+Para habilitar el envío de emails configurá `BREVO_API_KEY`, `MAIL_FROM_EMAIL` y opcionalmente `MAIL_FROM_NAME`. `FRONTEND_URL` se usa para construir los links de verificación y recuperación. Sin `BREVO_API_KEY`, los emails se registran en el log para desarrollo local.
 
 ---
 

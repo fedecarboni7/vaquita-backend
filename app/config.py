@@ -13,8 +13,12 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = ""
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRATION_MINUTES: int = 43200  # 30 days
+    ENVIRONMENT: str = "production"
     DEV_AUTH_MODE: bool = False
     FRONTEND_URL: str = "http://localhost:5173"
+    BREVO_API_KEY: str | None = None
+    MAIL_FROM_EMAIL: str = ""
+    MAIL_FROM_NAME: str = "Vaquita"
     GROQ_API_KEY: str = ""
     ENCRYPTION_KEY: str = ""
     FREE_DAILY_LIMIT: int = 5

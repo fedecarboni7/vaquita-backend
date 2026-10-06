@@ -12,6 +12,7 @@ dependencies = [
     "alembic>=1.18.4",
     "pydantic-settings>=2.14.2",
     "python-jose[cryptography]>=3.5.0",
+    "argon2-cffi>=25.1.0",
     "httpx>=0.28.1",
     "langgraph>=1.0.10",
     "langchain-google-genai>=4.2.1",
@@ -36,3 +37,4 @@ line-length = 120
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+asyncio_default_test_loop_scope = "session"
