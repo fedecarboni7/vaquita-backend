@@ -40,6 +40,10 @@ jobs:
 
     env:
       DATABASE_URL: postgresql+asyncpg://expenses_user:expenses_pass@localhost:5432/expenses_db_test
+      GROQ_DEFAULT_MODEL: test-model
+      GOOGLE_DEFAULT_MODEL: test-model
+      GROQ_FALLBACK_MODEL: test-model
+      GOOGLE_FALLBACK_MODEL: test-model
 
     steps:
       - uses: actions/checkout@v4

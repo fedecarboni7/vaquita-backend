@@ -178,3 +178,54 @@ def test_resolve_marks_amount_missing_when_text_is_unparseable():
 
     assert result["response_type"] == "clarification"
     assert result["missing_fields"] == ["amount"]
+
+
+def test_resolve_skips_inference_when_candidate_currency_differs():
+    ctx = build_context(last_used={("expense", "ARS"): "a2"})
+    ctx.account_id_to_currency["a2"] = "USD"
+    patch = ParseOutput(
+        kind="transaction", tx_type="expense", amount_text="500", description="Cena", starts_new_transaction=False
+    )
+    pending = {"type": "expense", "description": "Cena", "currency": "ARS"}
+
+    result = resolve_transaction(patch, pending, ctx, date(2026, 1, 1))
+
+    assert result["response_type"] == "clarification"
+    assert "account" in result["missing_fields"]
+    assert result["inferred_fields"] == []
+    assert result["payload"].get("account_id") is None
+
+
+def test_resolve_skips_inference_when_candidate_missing_from_currency_map():
+    ctx = build_context(last_used={("expense", "ARS"): "a9"})
+    patch = ParseOutput(
+        kind="transaction", tx_type="expense", amount_text="500", description="Cena", starts_new_transaction=False
+    )
+    pending = {"type": "expense", "description": "Cena", "currency": "ARS"}
+
+    result = resolve_transaction(patch, pending, ctx, date(2026, 1, 1))
+
+    assert result["response_type"] == "clarification"
+    assert "account" in result["missing_fields"]
+    assert result["inferred_fields"] == []
+    assert result["payload"].get("account_id") is None
+
+
+def test_resolve_infers_account_with_matching_non_default_currency():
+    ctx = build_context(last_used={("expense", "USD"): "a2"})
+    ctx.account_id_to_currency["a2"] = "USD"
+    patch = ParseOutput(
+        kind="transaction",
+        tx_type="expense",
+        amount_text="10",
+        description="Cena",
+        currency="USD",
+        starts_new_transaction=False,
+    )
+    pending = {"type": "expense", "description": "Cena", "currency": "USD"}
+
+    result = resolve_transaction(patch, pending, ctx, date(2026, 1, 1))
+
+    assert result["response_type"] == "draft"
+    assert result["payload"]["account_id"] == "a2"
+    assert result["inferred_fields"] == ["account"]

@@ -12,12 +12,25 @@ from app.agent.state import AgentState
 
 logger = logging.getLogger(__name__)
 
+_PARSE_RETRYABLE_ERRORS = (ValidationError, OutputParserException, ValueError, TypeError)
+
 
 def _get_runtime_llm(state: AgentState):
     llm = state.get("llm")
     if llm is None:
         raise ValueError("LLM is not available in agent state")
     return llm
+
+
+def _invoke_with_retry(structured_llm, messages, attempts=2):
+    """Invoke the structured LLM, retrying parse/validation errors once."""
+    last_error = None
+    for _ in range(attempts):
+        try:
+            return structured_llm.invoke(messages)
+        except _PARSE_RETRYABLE_ERRORS as exc:
+            last_error = exc
+    raise last_error
 
 
 def _render_pending_draft(pending: dict[str, Any] | None) -> str:
@@ -123,9 +136,9 @@ def parse(state: AgentState) -> dict:
     prompt = prompt.replace("{pending_draft}", _render_pending_draft(state.get("pending_draft")))
 
     try:
-        result = llm_model.invoke([SystemMessage(content=prompt), *state["messages"]])
+        result = _invoke_with_retry(llm_model, [SystemMessage(content=prompt), *state["messages"]])
         return {"parse_output": result}
-    except (ValidationError, OutputParserException, ValueError, TypeError):
+    except _PARSE_RETRYABLE_ERRORS:
         fallback = ParseOutput(kind="chat", reply="Uy, no pude entender eso. ¿Me lo repetís con otras palabras?")
         return {
             "parse_output": fallback,

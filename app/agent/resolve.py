@@ -360,9 +360,13 @@ def resolve_transaction(patch: ParseOutput, pending: dict[str, Any] | None, ctx:
         last_used = getattr(ctx, "last_used_account_ids", {})
         account_candidate = last_used.get((tx_type, currency))
         if account_candidate:
-            payload["account_id"] = account_candidate
-            payload["account"] = _build_account_name(ctx, account_candidate)
-            inferred_fields.append("account")
+            account_currencies = getattr(ctx, "account_id_to_currency", {})
+            if account_candidate in account_currencies:
+                account_currency = account_currencies[account_candidate] or "ARS"
+                if account_currency == currency:
+                    payload["account_id"] = account_candidate
+                    payload["account"] = _build_account_name(ctx, account_candidate)
+                    inferred_fields.append("account")
 
     if (
         tx_type == "transfer"

@@ -33,7 +33,7 @@ La respuesta `draft` no escribe en la base de datos: el frontend la muestra y cr
 | Orquestación de IA | LangChain + LangGraph |
 | LLM | Gemini / Groq (configurable por usuario) |
 | Transcripción de audio | Whisper vía Groq / Gemini |
-| Auth | python-jose (JWT) + Google OAuth + email y contraseña |
+| Auth | PyJWT (JWT) + Google OAuth + email y contraseña |
 | Linting / formato | Ruff |
 | Tests | pytest + pytest-asyncio |
 
@@ -55,7 +55,7 @@ uv sync
 
 # Configurar variables de entorno
 cp .env.example .env
-# Completar los valores en .env
+# Completar los valores en .env (las cuatro variables de modelos son obligatorias y no tienen valor por defecto)
 
 # Aplicar migraciones
 uv run alembic upgrade head

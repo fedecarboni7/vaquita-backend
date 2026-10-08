@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,10 +23,10 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     ENCRYPTION_KEY: str = ""
     FREE_DAILY_LIMIT: int = 5
-    GROQ_DEFAULT_MODEL: str = "openai/gpt-oss-120b"
-    GOOGLE_DEFAULT_MODEL: str = "gemini-3.5-flash-lite"
-    GROQ_FALLBACK_MODEL: str = "openai/gpt-oss-20b"
-    GOOGLE_FALLBACK_MODEL: str = "gemini-3.1-flash-lite"
+    GROQ_DEFAULT_MODEL: str = Field(min_length=1)
+    GOOGLE_DEFAULT_MODEL: str = Field(min_length=1)
+    GROQ_FALLBACK_MODEL: str = Field(min_length=1)
+    GOOGLE_FALLBACK_MODEL: str = Field(min_length=1)
     LANGSMITH_API_KEY: str = ""
     LANGSMITH_TRACING: bool = False
     LANGSMITH_ENDPOINT: str = "https://api.smith.langchain.com"
