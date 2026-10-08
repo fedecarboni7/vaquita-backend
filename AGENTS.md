@@ -21,7 +21,6 @@ This is the **backend** repo. The frontend is a separate React app.
 
 - The graph is `parse` (LLM call with one retry on parse errors) → conditional router → `resolve` (deterministic) or `handle_chat` → `END`.
 - `parse` interprets only the latest user message and returns a patch. Its structured-output schema is built per request with `Literal` values for short-lived account and category codes such as `a1`, `e1`, `e1.2`, `i1`, and `i1.1`; real database IDs are never sent to or returned by the LLM.
-- Amounts remain raw text in `amount_text` and are parsed in Python by `app/agent/amounts.py` using es-AR rules and multipliers such as `lucas`, `k`, `mil`, and `palo`.
 - `resolve` in `app/agent/resolve.py` is a pure function. It merges the patch onto the pending draft, resolves short codes to user-owned IDs, infers an expense or income account from the user's last-used account for `(type, currency)`, determines missing fields, and builds clarification text.
 - A draft can be blocked by a missing amount and, for transfers, missing origin or destination. Expense and income accounts are inferred when possible; an account is otherwise required. Inferred accounts are marked in `inferred_fields`.
 - The server is stateless across turns. The frontend echoes the previous clarification `data` as `pending_draft` in `POST /chat`; the backend whitelists the fields, sanitizes the draft, and drops IDs that do not belong to the current user.
@@ -29,7 +28,7 @@ This is the **backend** repo. The frontend is a separate React app.
 - Structured-output and validation failures are retried once before returning a friendly Spanish fallback message. Rate-limit and provider-auth errors are not retried and retain the router's existing provider and fallback-model handling.
 - Model names are configured only via environment variables (`GROQ_DEFAULT_MODEL`, `GOOGLE_DEFAULT_MODEL`, `GROQ_FALLBACK_MODEL`, `GOOGLE_FALLBACK_MODEL`), never hardcoded.
 - Each agent turn emits one structured metadata-only log line. It records routing and outcome metadata, never message text, amounts, descriptions, or names.
-- The LLM only interprets. Arithmetic, amount parsing, validation, matching, inference, and database writes remain in Python.
+- The LLM interprets, including turning the amount into a number. Arithmetic such as installments, validation, id resolution, account inference, and database writes stay in Python.
 
 ---
 
@@ -72,7 +71,7 @@ In a multi-repo task, only run these when backend files were changed.
 - No coverage thresholds — coverage is informational only
 - Small and independent tests — each sets up and tears down its own state
 - Prefer real behavior over mocks: use the actual FastAPI test client, avoid patching internals
-- One test file per feature (`test_delete_account_contract.py`, `test_amount_parsing.py`, `test_agent_resolve.py`)
+- One test file per feature (`test_delete_account_contract.py`, `test_agent_resolve.py`)
 - Use pytest-asyncio for all async tests (`asyncio_mode = "auto"` already configured)
 
 ---

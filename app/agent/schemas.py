@@ -27,8 +27,8 @@ class ParseOutput(BaseModel):
     reply: str | None = None
     tx_type: Literal["expense", "income", "transfer"] | None = None
     starts_new_transaction: bool = False
-    amount_text: str | None = None
-    to_amount_text: str | None = None
+    amount: float | None = None
+    to_amount: float | None = None
     description: str | None = None
     account: str | None = None
     account_destination: str | None = None

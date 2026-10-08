@@ -14,7 +14,7 @@ Backend de [vaquita](https://vaquita.up.railway.app), una app de finanzas person
 
 ### Flujo del agente
 
-`parse` interpreta únicamente el último mensaje y devuelve un parche estructurado usando códigos cortos por request para cuentas y categorías. Luego el grafo deriva a una respuesta conversacional o a `resolve`, que combina el parche con el `pending_draft`, parsea montos en Python, valida y resuelve IDs, infiere la cuenta usada recientemente cuando corresponde y devuelve un `draft` o una `clarification`. El frontend conserva el borrador parcial entre turnos mediante `pending_draft`; el servidor no mantiene estado conversacional.
+`parse` interpreta únicamente el último mensaje y devuelve un parche estructurado usando códigos cortos por request para cuentas y categorías. Luego el grafo deriva a una respuesta conversacional o a `resolve`, que combina el parche con el `pending_draft`, valida y resuelve IDs, infiere la cuenta usada recientemente cuando corresponde y devuelve un `draft` o una `clarification`. El frontend conserva el borrador parcial entre turnos mediante `pending_draft`; el servidor no mantiene estado conversacional.
 
 La respuesta `draft` no escribe en la base de datos: el frontend la muestra y crea la transacción cuando el usuario confirma.
 

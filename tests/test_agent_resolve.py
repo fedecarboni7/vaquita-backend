@@ -44,7 +44,7 @@ def test_resolve_keeps_pending_amount_when_only_account_is_supplied():
 
 def test_resolve_parses_amount_from_patch_when_pending_missing_amount():
     ctx = build_context()
-    patch = ParseOutput(kind="transaction", tx_type="expense", amount_text="20 lucas", starts_new_transaction=False)
+    patch = ParseOutput(kind="transaction", tx_type="expense", amount=20000, starts_new_transaction=False)
     pending = {"type": "expense", "description": "Compu", "currency": "ARS"}
 
     result = resolve_transaction(patch, pending, ctx, date(2026, 1, 1))
@@ -57,7 +57,7 @@ def test_resolve_parses_amount_from_patch_when_pending_missing_amount():
 def test_resolve_ignores_pending_when_new_transaction_starts():
     ctx = build_context()
     patch = ParseOutput(
-        kind="transaction", tx_type="expense", amount_text="15", description="Cena", starts_new_transaction=True
+        kind="transaction", tx_type="expense", amount=15, description="Cena", starts_new_transaction=True
     )
     pending = {"type": "expense", "amount": 30.0, "description": "Viejo", "currency": "ARS"}
 
@@ -71,7 +71,7 @@ def test_resolve_ignores_pending_when_new_transaction_starts():
 def test_resolve_infers_last_used_account_when_available():
     ctx = build_context(last_used={("expense", "ARS"): "a2"})
     patch = ParseOutput(
-        kind="transaction", tx_type="expense", amount_text="500", description="Cena", starts_new_transaction=False
+        kind="transaction", tx_type="expense", amount=500, description="Cena", starts_new_transaction=False
     )
     pending = {"type": "expense", "description": "Cena", "currency": "ARS"}
 
@@ -85,7 +85,7 @@ def test_resolve_infers_last_used_account_when_available():
 def test_resolve_requires_account_when_nothing_to_infer():
     ctx = build_context(last_used={})
     patch = ParseOutput(
-        kind="transaction", tx_type="expense", amount_text="500", description="Cena", starts_new_transaction=False
+        kind="transaction", tx_type="expense", amount=500, description="Cena", starts_new_transaction=False
     )
     pending = {"type": "expense", "description": "Cena", "currency": "ARS"}
 
@@ -103,7 +103,7 @@ def test_resolve_drops_income_category_when_expense_type():
         account="a1",
         category="i1",
         subcategory="i1.1",
-        amount_text="100",
+        amount=100,
         description="Cena",
         starts_new_transaction=False,
     )
@@ -118,7 +118,7 @@ def test_resolve_drops_income_category_when_expense_type():
 def test_resolve_drops_unknown_ids_from_pending():
     ctx = build_context()
     patch = ParseOutput(
-        kind="transaction", tx_type="expense", amount_text="500", description="Cena", starts_new_transaction=False
+        kind="transaction", tx_type="expense", amount=500, description="Cena", starts_new_transaction=False
     )
     pending = {"type": "expense", "account_id": "unknown", "category_id": "bad", "currency": "ARS"}
 
@@ -133,7 +133,7 @@ def test_resolve_transfer_same_account_is_disallowed():
     patch = ParseOutput(
         kind="transaction",
         tx_type="transfer",
-        amount_text="50",
+        amount=50,
         description="Transferencia",
         account="a2",
         account_destination="a2",
@@ -152,7 +152,7 @@ def test_resolve_installments_math_and_success_message():
     patch = ParseOutput(
         kind="transaction",
         tx_type="expense",
-        amount_text="1000",
+        amount=1000,
         description="Cafetera",
         account="a1",
         installments=3,
@@ -167,24 +167,68 @@ def test_resolve_installments_math_and_success_message():
     assert result["message"] == "¡Listo! Revisá los detalles y confirmá si todo está bien."
 
 
-def test_resolve_marks_amount_missing_when_text_is_unparseable():
+def test_resolve_marks_amount_missing_when_amount_is_invalid():
+    ctx = build_context()
+    for invalid_amount in [0, -5, None]:
+        patch = ParseOutput(
+            kind="transaction",
+            tx_type="expense",
+            amount=invalid_amount,
+            description="Cena",
+            starts_new_transaction=False,
+        )
+        pending = {"type": "expense", "currency": "ARS"}
+
+        result = resolve_transaction(patch, pending, ctx, date(2026, 1, 1))
+
+        assert result["response_type"] == "clarification"
+        assert "amount" in result["missing_fields"]
+
+
+def test_resolve_accepts_numeric_amount_from_llm():
     ctx = build_context()
     patch = ParseOutput(
-        kind="transaction", tx_type="expense", amount_text="abc", description="Cena", starts_new_transaction=False
+        kind="transaction",
+        tx_type="expense",
+        amount=10500,
+        description="Supermercado",
+        account="a1",
+        starts_new_transaction=False,
     )
     pending = {"type": "expense", "currency": "ARS"}
 
     result = resolve_transaction(patch, pending, ctx, date(2026, 1, 1))
 
-    assert result["response_type"] == "clarification"
-    assert result["missing_fields"] == ["amount"]
+    assert result["response_type"] == "draft"
+    assert result["payload"]["amount"] == 10500
+
+
+def test_resolve_ignores_non_positive_to_amount():
+    ctx = build_context()
+    for invalid_to_amount in [0, -100]:
+        patch = ParseOutput(
+            kind="transaction",
+            tx_type="transfer",
+            amount=1000,
+            to_amount=invalid_to_amount,
+            description="Transferencia",
+            account="a1",
+            account_destination="a2",
+            starts_new_transaction=False,
+        )
+        pending = {"type": "transfer", "currency": "ARS"}
+
+        result = resolve_transaction(patch, pending, ctx, date(2026, 1, 1))
+
+        assert result["response_type"] == "draft"
+        assert result["payload"].get("to_amount") is None
 
 
 def test_resolve_skips_inference_when_candidate_currency_differs():
     ctx = build_context(last_used={("expense", "ARS"): "a2"})
     ctx.account_id_to_currency["a2"] = "USD"
     patch = ParseOutput(
-        kind="transaction", tx_type="expense", amount_text="500", description="Cena", starts_new_transaction=False
+        kind="transaction", tx_type="expense", amount=500, description="Cena", starts_new_transaction=False
     )
     pending = {"type": "expense", "description": "Cena", "currency": "ARS"}
 
@@ -199,7 +243,7 @@ def test_resolve_skips_inference_when_candidate_currency_differs():
 def test_resolve_skips_inference_when_candidate_missing_from_currency_map():
     ctx = build_context(last_used={("expense", "ARS"): "a9"})
     patch = ParseOutput(
-        kind="transaction", tx_type="expense", amount_text="500", description="Cena", starts_new_transaction=False
+        kind="transaction", tx_type="expense", amount=500, description="Cena", starts_new_transaction=False
     )
     pending = {"type": "expense", "description": "Cena", "currency": "ARS"}
 
@@ -217,7 +261,7 @@ def test_resolve_infers_account_with_matching_non_default_currency():
     patch = ParseOutput(
         kind="transaction",
         tx_type="expense",
-        amount_text="10",
+        amount=10,
         description="Cena",
         currency="USD",
         starts_new_transaction=False,

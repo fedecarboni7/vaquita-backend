@@ -1,11 +1,22 @@
 from __future__ import annotations
 
+import math
 from datetime import date
 from math import floor
 from typing import Any
 
-from app.agent.amounts import parse_amount_text
 from app.agent.schemas import ParseOutput
+
+
+def _clean_amount(value: Any) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if not isinstance(value, (int, float)):
+        return None
+    amount = float(value)
+    if not math.isfinite(amount) or amount <= 0:
+        return None
+    return round(amount, 2)
 
 
 def _safe_date(value: str | None) -> str | None:
@@ -124,9 +135,15 @@ def _sanitize_pending(pending: dict[str, Any] | None, ctx: Any) -> dict[str, Any
     if tx_type in {"expense", "income", "transfer"}:
         sanitized["type"] = tx_type
 
-    for field in ["amount", "to_amount", "description", "expense_date", "currency", "installments", "note"]:
+    for field in ["description", "expense_date", "currency", "installments", "note"]:
         if field in pending:
             sanitized[field] = pending[field]
+
+    for field in ["amount", "to_amount"]:
+        if field in pending:
+            cleaned = _clean_amount(pending[field])
+            if cleaned is not None:
+                sanitized[field] = cleaned
 
     account_id = pending.get("account_id")
     if account_id and account_id in getattr(ctx, "account_id_to_name", {}):
@@ -165,10 +182,12 @@ def _sanitize_pending(pending: dict[str, Any] | None, ctx: Any) -> dict[str, Any
 
 def _hydrate_pending_to_payload(base: dict[str, Any], ctx: Any, tx_type: str) -> dict[str, Any]:
     payload: dict[str, Any] = {"type": tx_type}
-    if base.get("amount") is not None:
-        payload["amount"] = float(base["amount"])
-    if base.get("to_amount") is not None:
-        payload["to_amount"] = float(base["to_amount"])
+    cleaned_amount = _clean_amount(base.get("amount"))
+    if cleaned_amount is not None:
+        payload["amount"] = cleaned_amount
+    cleaned_to_amount = _clean_amount(base.get("to_amount"))
+    if cleaned_to_amount is not None:
+        payload["to_amount"] = cleaned_to_amount
     if base.get("description"):
         payload["description"] = base["description"]
     if base.get("currency"):
@@ -266,21 +285,19 @@ def resolve_transaction(patch: ParseOutput, pending: dict[str, Any] | None, ctx:
     missing_fields: list[str] = []
     account_names = list(getattr(ctx, "account_id_to_name", {}).values())
 
-    if patch.amount_text is not None:
-        parsed_amount = parse_amount_text(patch.amount_text)
-        if parsed_amount is not None:
-            payload["amount"] = parsed_amount
+    if patch.amount is not None:
+        cleaned_amount = _clean_amount(patch.amount)
+        if cleaned_amount is not None:
+            payload["amount"] = cleaned_amount
         elif "amount" not in payload:
             missing_fields.append("amount")
     elif "amount" not in payload:
         missing_fields.append("amount")
 
-    if patch.to_amount_text is not None:
-        parsed_to_amount = parse_amount_text(patch.to_amount_text)
-        if parsed_to_amount is not None:
-            payload["to_amount"] = parsed_to_amount
-        elif "to_amount" not in payload:
-            payload["to_amount"] = None
+    if patch.to_amount is not None:
+        cleaned_to_amount = _clean_amount(patch.to_amount)
+        if cleaned_to_amount is not None:
+            payload["to_amount"] = cleaned_to_amount
 
     if patch.description is not None:
         payload["description"] = patch.description
