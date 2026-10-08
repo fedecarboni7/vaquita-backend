@@ -10,6 +10,7 @@ def get_llm(provider: str, api_key: str) -> BaseChatModel:
         return ChatGroq(
             model=settings.GROQ_DEFAULT_MODEL,
             api_key=api_key,
+            temperature=0,
         )
 
     if provider == "google":
@@ -32,6 +33,7 @@ def get_fallback_llm(provider: str, api_key: str) -> BaseChatModel | None:
         return ChatGroq(
             model=settings.GROQ_FALLBACK_MODEL,
             api_key=api_key,
+            temperature=0,
         )
 
     if provider == "google":

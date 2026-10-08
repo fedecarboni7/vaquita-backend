@@ -1,64 +1,43 @@
+import logging
+from typing import Any
+
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.graph import END, StateGraph
 
 from app.agent.llm import get_llm
-from app.agent.nodes import (
-    classify,
-    extract_expense,
-    extract_income,
-    extract_transfer,
-    handle_clarification,
-    handle_direct_answer,
-    validate,
-)
+from app.agent.nodes import handle_chat, parse, resolve
 from app.agent.state import AgentState
 
+logger = logging.getLogger(__name__)
 
-def _route_after_classify(state: AgentState) -> str:
-    output = state["classifier_output"]
-    intent = output.intent
 
-    if intent == "clarification_needed":
-        return "handle_clarification"
-    if intent == "direct_answer":
-        return "handle_direct_answer"
-
-    # intent == "register" → route by subtype
-    subtype = output.subtype
-    return f"extract_{subtype}"
+def _route_after_parse(state: AgentState) -> str:
+    parse_output = state.get("parse_output")
+    if parse_output is None or parse_output.kind == "chat":
+        return "handle_chat"
+    return "resolve"
 
 
 def _build_graph() -> StateGraph:
     graph = StateGraph(AgentState)
 
-    graph.add_node("classify", classify)
-    graph.add_node("handle_clarification", handle_clarification)
-    graph.add_node("handle_direct_answer", handle_direct_answer)
-    graph.add_node("extract_expense", extract_expense)
-    graph.add_node("extract_income", extract_income)
-    graph.add_node("extract_transfer", extract_transfer)
-    graph.add_node("validate", validate)
+    graph.add_node("parse", parse)
+    graph.add_node("handle_chat", handle_chat)
+    graph.add_node("resolve", resolve)
 
-    graph.set_entry_point("classify")
+    graph.set_entry_point("parse")
     graph.add_conditional_edges(
-        "classify",
-        _route_after_classify,
+        "parse",
+        _route_after_parse,
         {
-            "handle_clarification": "handle_clarification",
-            "handle_direct_answer": "handle_direct_answer",
-            "extract_expense": "extract_expense",
-            "extract_income": "extract_income",
-            "extract_transfer": "extract_transfer",
+            "handle_chat": "handle_chat",
+            "resolve": "resolve",
         },
     )
 
-    graph.add_edge("handle_clarification", END)
-    graph.add_edge("handle_direct_answer", END)
-    graph.add_edge("extract_expense", "validate")
-    graph.add_edge("extract_income", "validate")
-    graph.add_edge("extract_transfer", "validate")
-    graph.add_edge("validate", END)
+    graph.add_edge("handle_chat", END)
+    graph.add_edge("resolve", END)
 
     return graph.compile()
 
@@ -71,43 +50,18 @@ async def run_agent(
     provider: str,
     api_key: str,
     history: list[dict] | None = None,
-    expense_categories: list[str] | None = None,
-    income_categories: list[str] | None = None,
-    expense_category_tree: list[dict] | None = None,
-    income_category_tree: list[dict] | None = None,
-    expense_category_index: dict[str, str] | None = None,
-    income_category_index: dict[str, str] | None = None,
-    expense_subcategory_index: dict[str, dict[str, str]] | None = None,
-    income_subcategory_index: dict[str, dict[str, str]] | None = None,
-    accounts: list[str] | None = None,
-    account_name_to_id: dict[str, str] | None = None,
+    pending_draft: dict[str, Any] | None = None,
+    agent_context: Any | None = None,
     llm_override: BaseChatModel | None = None,
 ) -> dict:
-    """Run the agent graph and return response_type, message, and data.
-
-    Args:
-        message: The current user message.
-        provider: LLM provider to use (google or groq).
-        api_key: API key for the selected provider.
-        history: Optional list of previous messages (dicts with role/content).
-        expense_categories: Expense category names for the user.
-        income_categories: Income category names for the user.
-        expense_category_tree: Hierarchical structure [{category, subcategories[]}] for expenses.
-        income_category_tree: Hierarchical structure [{category, subcategories[]}] for incomes.
-        expense_subcategory_index: Case-insensitive mapping category/subcategory -> subcategory_id.
-        income_subcategory_index: Case-insensitive mapping category/subcategory -> subcategory_id.
-        accounts: Account names for the user.
-        account_name_to_id: Case-insensitive mapping account name -> account_id.
-    """
-    messages = []
-    if history:
-        for msg in history:
-            if msg["role"] == "user":
-                messages.append(HumanMessage(content=msg["content"]))
-            else:
-                from langchain_core.messages import AIMessage
-
-                messages.append(AIMessage(content=msg["content"]))
+    """Run the agent graph and return response_type, message, and data."""
+    history = history[-6:] if history else []
+    messages: list[AIMessage | HumanMessage] = []
+    for msg in history:
+        if msg["role"] == "user":
+            messages.append(HumanMessage(content=msg["content"]))
+        else:
+            messages.append(AIMessage(content=msg["content"]))
 
     messages.append(HumanMessage(content=message))
     llm = llm_override or get_llm(provider=provider, api_key=api_key)
@@ -116,23 +70,36 @@ async def run_agent(
         {
             "messages": messages,
             "llm": llm,
-            "expense_categories": expense_categories or [],
-            "income_categories": income_categories or [],
-            "expense_category_tree": expense_category_tree or [],
-            "income_category_tree": income_category_tree or [],
-            "expense_category_index": expense_category_index or {},
-            "income_category_index": income_category_index or {},
-            "expense_subcategory_index": expense_subcategory_index or {},
-            "income_subcategory_index": income_subcategory_index or {},
-            "accounts": accounts or [],
-            "account_name_to_id": account_name_to_id or {},
+            "pending_draft": pending_draft,
+            "agent_context": agent_context,
         }
     )
 
     last_ai_message = result["messages"][-1]
+    outcome = result.get("response_type", "answer")
+    parse_output = result.get("parse_output")
+    tx_type = None
+    if parse_output is not None:
+        tx_type = getattr(parse_output, "tx_type", None)
+    if result.get("response_payload") is not None:
+        tx_type = result["response_payload"].get("type", tx_type)
+
+    logger.info(
+        "agent_turn",
+        extra={
+            "kind": "transaction" if tx_type is not None else getattr(parse_output, "kind", "chat"),
+            "tx_type": tx_type,
+            "outcome": outcome,
+            "missing_fields": result.get("missing_fields") or [],
+            "inferred_fields": result.get("inferred_fields") or [],
+            "had_pending_draft": pending_draft is not None,
+            "starts_new_transaction": getattr(parse_output, "starts_new_transaction", False),
+            "provider_model": getattr(llm, "model_name", getattr(llm, "model", provider)),
+        },
+    )
 
     return {
-        "response_type": result.get("response_type", "answer"),
+        "response_type": outcome,
         "message": last_ai_message.content,
         "data": result.get("response_payload"),
     }

@@ -1,56 +1,40 @@
 from typing import Literal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict
 
 CurrencyCode = Literal["ARS", "USD"]
 
 
-class CurrencyNormalizedModel(BaseModel):
-    @field_validator("currency", mode="before", check_fields=False)
-    @classmethod
-    def normalize_currency(cls, value: str) -> str:
-        if isinstance(value, str):
-            return value.upper()
-        return value
+class PendingDraft(BaseModel):
+    model_config = ConfigDict(extra="ignore")
 
-
-class ClassifierOutput(BaseModel):
-    intent: Literal["register", "clarification_needed", "direct_answer"]
-    subtype: Literal["expense", "income", "transfer"] | None = None
-    missing_fields: list[str] | None = None
-    clarification_message: str | None = None
-    direct_answer_message: str | None = None
-
-
-class ExpenseExtractorOutput(CurrencyNormalizedModel):
-    amount: float
-    description: str
-    account: str
-    category: str | None = None
-    subcategory_name: str | None = None
+    type: Literal["expense", "income", "transfer"] | None = None
+    amount: float | None = None
+    to_amount: float | None = None
+    description: str | None = None
+    account_id: str | None = None
+    account_destination_id: str | None = None
+    category_id: str | None = None
+    subcategory_id: str | None = None
     expense_date: str | None = None
-    currency: CurrencyCode = "ARS"
+    currency: CurrencyCode | None = None
     installments: int | None = None
     note: str | None = None
 
 
-class IncomeExtractorOutput(CurrencyNormalizedModel):
-    amount: float
-    description: str
-    account: str
+class ParseOutput(BaseModel):
+    kind: Literal["transaction", "chat"]
+    reply: str | None = None
+    tx_type: Literal["expense", "income", "transfer"] | None = None
+    starts_new_transaction: bool = False
+    amount_text: str | None = None
+    to_amount_text: str | None = None
+    description: str | None = None
+    account: str | None = None
+    account_destination: str | None = None
     category: str | None = None
-    subcategory_name: str | None = None
-    expense_date: str | None = None
-    currency: CurrencyCode = "ARS"
-    note: str | None = None
-
-
-class TransferExtractorOutput(CurrencyNormalizedModel):
-    amount: float
-    to_amount: float | None = None
-    description: str
-    account: str
-    account_destination: str
-    expense_date: str | None = None
-    currency: CurrencyCode = "ARS"
+    subcategory: str | None = None
+    date: str | None = None
+    currency: CurrencyCode | None = None
+    installments: int | None = None
     note: str | None = None

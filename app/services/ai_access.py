@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 
+from cryptography.exceptions import InvalidTag
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -19,6 +20,9 @@ FREE_LIMIT_REACHED_AGENT_MESSAGE = (
 FREE_LIMIT_REACHED_TRANSCRIBE_MESSAGE = "Alcanzaste el límite diario gratuito de transcripción. Agregá tu propia API key en Configuración para seguir transcribiendo audio."
 FALLBACK_API_KEY_MISSING_MESSAGE = "No hay API key de fallback configurada en el servidor."
 INVALID_API_KEY_MESSAGE = "Tu API key no es válida. Revisá que sea correcta en Configuración."
+UNREADABLE_API_KEY_MESSAGE = (
+    "La API key guardada no se puede desencriptar. Eliminála y volvé a guardarla en Configuración."
+)
 
 
 @dataclass(slots=True)
@@ -37,7 +41,15 @@ async def _get_persisted_user_api_key(
     if user_api_key is None:
         return None
 
-    return user_api_key.provider.value, decrypt_key(user_api_key.encrypted_key)
+    try:
+        decrypted_key = decrypt_key(user_api_key.encrypted_key)
+    except InvalidTag as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=UNREADABLE_API_KEY_MESSAGE,
+        ) from exc
+
+    return user_api_key.provider.value, decrypted_key
 
 
 async def _consume_free_quota(

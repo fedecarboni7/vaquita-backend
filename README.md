@@ -1,16 +1,22 @@
 # vaquita — Backend
 
-Backend de [vaquita](https://vaquita.up.railway.app), una app de finanzas personales con IA integrada. Los usuarios registran transacciones en lenguaje natural a través de un chat, y el agente interpreta, estructura y persiste la información automáticamente.
+Backend de [vaquita](https://vaquita.up.railway.app), una app de finanzas personales con IA integrada. Los usuarios describen transacciones en lenguaje natural a través de un chat, y el agente interpreta la información, arma un borrador y lo devuelve para confirmar antes de persistirlo.
 
 ---
 
 ## ¿Qué hace?
 
 - **Chat financiero con IA** — registrá gastos, ingresos y transferencias escribiendo o mandando un audio
-- **Agente LangGraph multi-nodo** — clasifica la intención, extrae los datos y valida contra las cuentas y categorías reales del usuario
+- **Agente LangGraph** — un nodo LLM interpreta el último mensaje y un paso determinístico resuelve el borrador contra las cuentas y categorías reales del usuario
 - **Cálculos determinísticos** — toda la aritmética y lógica de negocio se ejecuta en Python/SQL, no en el LLM
 - **BYOK (Bring Your Own Key)** — soporte para Groq y Google AI Studio; si el usuario carga su propia API key, se usa en lugar de la del servidor
-- **Rate limiting** — límite diario de uso gratuito compartido entre chat y transcripción de audio
+- **Rate limiting** — límite diario de uso gratuito por tipo de uso: chat y transcripción de audio mantienen cuotas separadas
+
+### Flujo del agente
+
+`parse` interpreta únicamente el último mensaje y devuelve un parche estructurado usando códigos cortos por request para cuentas y categorías. Luego el grafo deriva a una respuesta conversacional o a `resolve`, que combina el parche con el `pending_draft`, parsea montos en Python, valida y resuelve IDs, infiere la cuenta usada recientemente cuando corresponde y devuelve un `draft` o una `clarification`. El frontend conserva el borrador parcial entre turnos mediante `pending_draft`; el servidor no mantiene estado conversacional.
+
+La respuesta `draft` no escribe en la base de datos: el frontend la muestra y crea la transacción cuando el usuario confirma.
 
 ---
 

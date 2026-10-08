@@ -1,21 +1,16 @@
+import logging
 from datetime import date
-from math import floor
+from typing import Any, Literal
 
+from langchain_core.exceptions import OutputParserException
 from langchain_core.messages import AIMessage, SystemMessage
+from pydantic import ValidationError, create_model
 
-from app.agent.prompts import (
-    CLASSIFIER_PROMPT,
-    EXPENSE_EXTRACTOR_PROMPT,
-    INCOME_EXTRACTOR_PROMPT,
-    TRANSFER_EXTRACTOR_PROMPT,
-)
-from app.agent.schemas import (
-    ClassifierOutput,
-    ExpenseExtractorOutput,
-    IncomeExtractorOutput,
-    TransferExtractorOutput,
-)
+from app.agent.prompts import PARSE_PROMPT
+from app.agent.schemas import ParseOutput
 from app.agent.state import AgentState
+
+logger = logging.getLogger(__name__)
 
 
 def _get_runtime_llm(state: AgentState):
@@ -25,323 +20,144 @@ def _get_runtime_llm(state: AgentState):
     return llm
 
 
-def classify(state: AgentState) -> dict:
-    """Classify user intent using the LLM."""
-    llm = _get_runtime_llm(state).with_structured_output(ClassifierOutput)
+def _render_pending_draft(pending: dict[str, Any] | None) -> str:
+    if not pending:
+        return "Ninguno."
 
-    accounts = state.get("accounts", [])
-    acc_text = ", ".join(accounts) if accounts else "No hay cuentas definidas."
+    parts = []
+    if pending.get("type"):
+        parts.append(f"Tipo: {pending['type']}")
+    if pending.get("description"):
+        parts.append(f"Descripción: {pending['description']}")
+    if pending.get("amount") is not None:
+        parts.append(f"Monto: {pending['amount']}")
+    if pending.get("account_id") is None and pending.get("type") in {"expense", "income"}:
+        parts.append("Falta: cuenta")
+    if pending.get("account_destination_id") is None and pending.get("type") == "transfer":
+        parts.append("Falta: cuenta destino")
+    return " | ".join(parts) if parts else "Ninguno."
 
-    system_msg = SystemMessage(content=CLASSIFIER_PROMPT.format(accounts=acc_text))
-    messages = [system_msg, *state["messages"]]
-    result: ClassifierOutput = llm.invoke(messages)
 
-    return {"classifier_output": result}
+def _build_parse_model(ctx: Any):
+    account_values = list(dict.fromkeys(getattr(ctx, "account_codes", {}).values()))
+    expense_category_values = list(dict.fromkeys(getattr(ctx, "expense_category_codes", {}).values()))
+    income_category_values = list(dict.fromkeys(getattr(ctx, "income_category_codes", {}).values()))
 
+    expense_subcategory_values = []
+    for subitems in getattr(ctx, "expense_subcategory_codes", {}).values():
+        expense_subcategory_values.extend(subitems.values())
+    income_subcategory_values = []
+    for subitems in getattr(ctx, "income_subcategory_codes", {}).values():
+        income_subcategory_values.extend(subitems.values())
 
-def extract_expense(state: AgentState) -> dict:
-    """Extract expense fields from the user message."""
-    llm = _get_runtime_llm(state).with_structured_output(ExpenseExtractorOutput)
-
-    accounts = state.get("accounts", [])
-    acc_text = ", ".join(accounts) if accounts else "No hay cuentas definidas."
-    category_tree = state.get("expense_category_tree", [])
-    if category_tree:
-        cat_lines = []
-        for item in category_tree:
-            name = str(item.get("category", ""))
-            subcategories = item.get("subcategories", [])
-            if subcategories:
-                cat_lines.append(f"- {name}: {', '.join(subcategories)}")
-            else:
-                cat_lines.append(f"- {name}")
-        cat_text = "\n".join(cat_lines)
-    else:
-        cat_text = "Inferí la categoría."
-
-    system_msg = SystemMessage(
-        content=EXPENSE_EXTRACTOR_PROMPT.format(
-            accounts=acc_text,
-            expense_categories=cat_text,
-            today=date.today().isoformat(),
-        )
+    account_field = Literal[tuple(account_values)] | None if account_values else type(None)
+    category_field = (
+        Literal[tuple(expense_category_values + income_category_values)] | None
+        if (expense_category_values or income_category_values)
+        else type(None)
     )
-    result: ExpenseExtractorOutput = llm.invoke([system_msg, *state["messages"]])
-
-    return {"extractor_output": result.model_dump(exclude_none=True)}
-
-
-def extract_income(state: AgentState) -> dict:
-    """Extract income fields from the user message."""
-    llm = _get_runtime_llm(state).with_structured_output(IncomeExtractorOutput)
-
-    accounts = state.get("accounts", [])
-    acc_text = ", ".join(accounts) if accounts else "No hay cuentas definidas."
-    category_tree = state.get("income_category_tree", [])
-    if category_tree:
-        cat_lines = []
-        for item in category_tree:
-            name = str(item.get("category", ""))
-            subcategories = item.get("subcategories", [])
-            if subcategories:
-                cat_lines.append(f"- {name}: {', '.join(subcategories)}")
-            else:
-                cat_lines.append(f"- {name}")
-        cat_text = "\n".join(cat_lines)
-    else:
-        cat_text = "Inferí la categoría."
-
-    system_msg = SystemMessage(
-        content=INCOME_EXTRACTOR_PROMPT.format(
-            accounts=acc_text,
-            income_categories=cat_text,
-            today=date.today().isoformat(),
-        )
+    subcategory_field = (
+        Literal[tuple(expense_subcategory_values + income_subcategory_values)] | None
+        if (expense_subcategory_values or income_subcategory_values)
+        else type(None)
     )
-    result: IncomeExtractorOutput = llm.invoke([system_msg, *state["messages"]])
 
-    return {"extractor_output": result.model_dump(exclude_none=True)}
-
-
-def extract_transfer(state: AgentState) -> dict:
-    """Extract transfer fields from the user message."""
-    llm = _get_runtime_llm(state).with_structured_output(TransferExtractorOutput)
-
-    accounts = state.get("accounts", [])
-    acc_text = ", ".join(accounts) if accounts else "No hay cuentas definidas."
-
-    system_msg = SystemMessage(
-        content=TRANSFER_EXTRACTOR_PROMPT.format(
-            accounts=acc_text,
-            today=date.today().isoformat(),
-        )
+    return create_model(
+        "DynamicParseOutput",
+        __base__=ParseOutput,
+        kind=(Literal["transaction", "chat"], ...),
+        reply=(str | None, None),
+        tx_type=(Literal["expense", "income", "transfer"] | None, None),
+        starts_new_transaction=(bool, False),
+        amount_text=(str | None, None),
+        to_amount_text=(str | None, None),
+        description=(str | None, None),
+        account=(account_field, None),
+        account_destination=(account_field, None),
+        category=(category_field, None),
+        subcategory=(subcategory_field, None),
+        date=(str | None, None),
+        currency=(Literal["ARS", "USD"] | None, None),
+        installments=(int | None, None),
+        note=(str | None, None),
     )
-    result: TransferExtractorOutput = llm.invoke([system_msg, *state["messages"]])
-
-    return {"extractor_output": result.model_dump(exclude_none=True)}
 
 
-def _fuzzy_match(value: str, valid_options: list[str]) -> str:
-    """Try case-insensitive match against valid options. Return original if no match."""
-    lower = value.lower()
-    for option in valid_options:
-        if option.lower() == lower:
-            return option
-    return value
+def parse(state: AgentState) -> dict:
+    """Parse the last user message into a structured patch."""
+    llm = _get_runtime_llm(state)
+    ctx = state.get("agent_context")
+    schema = _build_parse_model(ctx)
+    llm_model = llm.with_structured_output(schema)
 
+    account_lines = []
+    if getattr(ctx, "account_codes", {}):
+        for name, code in getattr(ctx, "account_codes", {}).items():
+            account_lines.append(f"{code} {name}")
+    account_text = ", ".join(account_lines) if account_lines else "No hay cuentas definidas."
 
-def _resolve_subcategory_id(
-    category_name: str,
-    subcategory_name: str,
-    subcategory_index: dict[str, dict[str, str]],
-) -> tuple[str, str | None]:
-    for indexed_category_name, subcategories in subcategory_index.items():
-        if indexed_category_name.lower() != category_name.lower():
-            continue
-
-        for indexed_subcategory_name, subcategory_id in subcategories.items():
-            if indexed_subcategory_name.lower() == subcategory_name.lower():
-                return indexed_subcategory_name, subcategory_id
-
-    return subcategory_name, None
-
-
-def _resolve_category_id(category_name: str, category_index: dict[str, str]) -> tuple[str, str | None]:
-    for indexed_category_name, category_id in category_index.items():
-        if indexed_category_name.lower() == category_name.lower():
-            return indexed_category_name, category_id
-    return category_name, None
-
-
-def _resolve_account_id(
-    account_name: str,
-    accounts: list[str],
-    account_name_to_id: dict[str, str],
-) -> tuple[str, str | None]:
-    normalized_name = _fuzzy_match(account_name, accounts) if accounts else account_name
-    return normalized_name, account_name_to_id.get(normalized_name.strip().lower())
-
-
-def _build_account_clarification_message(
-    *,
-    missing_fields: list[str],
-    invalid_account_values: dict[str, str],
-    accounts: list[str],
-) -> str:
-    issues: list[str] = []
-
-    if "account" in missing_fields:
-        issues.append("la cuenta de origen")
-    if "account_destination" in missing_fields:
-        issues.append("la cuenta destino")
-
-    invalid_origin = invalid_account_values.get("account")
-    if invalid_origin:
-        issues.append(f"la cuenta de origen '{invalid_origin}' no existe")
-
-    invalid_destination = invalid_account_values.get("account_destination")
-    if invalid_destination:
-        issues.append(f"la cuenta destino '{invalid_destination}' no existe")
-
-    if issues:
-        if len(issues) == 1:
-            message = f"Necesito que aclares {issues[0]}."
+    expense_categories = getattr(ctx, "expense_category_codes", {})
+    expense_category_lines = []
+    for name, code in expense_categories.items():
+        subitems = getattr(ctx, "expense_subcategory_codes", {}).get(code, {})
+        if subitems:
+            sub_text = ", ".join(f"{sub_code} {sub_name}" for sub_name, sub_code in subitems.items())
+            expense_category_lines.append(f"{code} {name} → {sub_text}")
         else:
-            message = f"Necesito que aclares {', '.join(issues[:-1])} y {issues[-1]}."
-    else:
-        message = "Necesito que aclares la cuenta para poder registrar la transacción."
+            expense_category_lines.append(f"{code} {name}")
 
-    if accounts:
-        return f"{message} Cuentas disponibles: {', '.join(accounts)}."
-
-    return f"{message} Primero creá una cuenta para poder registrar la transacción."
-
-
-def validate(state: AgentState) -> dict:
-    """Validate extracted fields against user's real accounts and categories."""
-    data = dict(state["extractor_output"])
-    subtype = state["classifier_output"].subtype
-    accounts = state.get("accounts", [])
-    account_name_to_id = state.get("account_name_to_id", {})
-
-    # Add transaction type
-    data["type"] = subtype
-
-    missing_account_fields: list[str] = []
-    invalid_account_values: dict[str, str] = {}
-
-    # Validate and resolve source account to account_id
-    account_name = data.get("account")
-    if isinstance(account_name, str) and account_name.strip():
-        normalized_account_name, account_id = _resolve_account_id(
-            account_name,
-            accounts,
-            account_name_to_id,
-        )
-        data["account"] = normalized_account_name
-        data["account_id"] = account_id
-        if account_id is None:
-            invalid_account_values["account"] = account_name
-    else:
-        missing_account_fields.append("account")
-        data["account_id"] = None
-
-    # Validate and resolve destination account for transfers
-    if subtype == "transfer":
-        data.setdefault("to_amount", None)
-        destination_name = data.get("account_destination")
-        if isinstance(destination_name, str) and destination_name.strip():
-            normalized_destination_name, destination_account_id = _resolve_account_id(
-                destination_name,
-                accounts,
-                account_name_to_id,
-            )
-            data["account_destination"] = normalized_destination_name
-            data["account_destination_id"] = destination_account_id
-            if destination_account_id is None:
-                invalid_account_values["account_destination"] = destination_name
+    income_categories = getattr(ctx, "income_category_codes", {})
+    income_category_lines = []
+    for name, code in income_categories.items():
+        subitems = getattr(ctx, "income_subcategory_codes", {}).get(code, {})
+        if subitems:
+            sub_text = ", ".join(f"{sub_code} {sub_name}" for sub_name, sub_code in subitems.items())
+            income_category_lines.append(f"{code} {name} → {sub_text}")
         else:
-            missing_account_fields.append("account_destination")
-            data["account_destination_id"] = None
-    else:
-        data["account_destination_id"] = None
+            income_category_lines.append(f"{code} {name}")
 
-    if missing_account_fields or invalid_account_values:
+    prompt = PARSE_PROMPT.replace("{accounts}", account_text)
+    prompt = prompt.replace("{expense_categories}", "; ".join(expense_category_lines) or "Sin categorías de gastos.")
+    prompt = prompt.replace("{income_categories}", "; ".join(income_category_lines) or "Sin categorías de ingresos.")
+    prompt = prompt.replace("{today}", date.today().isoformat())
+    prompt = prompt.replace("{pending_draft}", _render_pending_draft(state.get("pending_draft")))
+
+    try:
+        result = llm_model.invoke([SystemMessage(content=prompt), *state["messages"]])
+        return {"parse_output": result}
+    except (ValidationError, OutputParserException, ValueError, TypeError):
+        fallback = ParseOutput(kind="chat", reply="Uy, no pude entender eso. ¿Me lo repetís con otras palabras?")
         return {
-            "response_type": "clarification",
-            "response_payload": None,
-            "messages": [
-                AIMessage(
-                    content=_build_account_clarification_message(
-                        missing_fields=missing_account_fields,
-                        invalid_account_values=invalid_account_values,
-                        accounts=accounts,
-                    )
-                )
-            ],
+            "parse_output": fallback,
+            "messages": [AIMessage(content=fallback.reply)],
         }
 
-    # Validate category
-    if "category" in data:
-        if subtype == "expense":
-            categories = state.get("expense_categories", [])
-            category_index = state.get("expense_category_index", {})
-        elif subtype == "income":
-            categories = state.get("income_categories", [])
-            category_index = state.get("income_category_index", {})
-        else:
-            categories = []
-            category_index = {}
 
-        if categories:
-            data["category"] = _fuzzy_match(data["category"], categories)
+def resolve(state: AgentState) -> dict:
+    from app.agent.resolve import resolve_transaction
 
-        if data.get("category"):
-            normalized_category_name, category_id = _resolve_category_id(data["category"], category_index)
-            data["category_name"] = normalized_category_name
-            data["category_id"] = category_id
-        else:
-            data["category_name"] = None
-            data["category_id"] = None
-
-    # Resolve subcategory_name -> subcategory_id
-    if "subcategory_name" in data and data.get("subcategory_name"):
-        category_name = data.get("category_name") or data.get("category")
-        if category_name:
-            if subtype == "expense":
-                subcategory_index = state.get("expense_subcategory_index", {})
-            elif subtype == "income":
-                subcategory_index = state.get("income_subcategory_index", {})
-            else:
-                subcategory_index = {}
-
-            normalized_subcategory_name, subcategory_id = _resolve_subcategory_id(
-                category_name=category_name,
-                subcategory_name=data["subcategory_name"],
-                subcategory_index=subcategory_index,
-            )
-            data["subcategory_name"] = normalized_subcategory_name
-            data["subcategory_id"] = subcategory_id
-        else:
-            data["subcategory_id"] = None
-
-    # If installments are present, include the per-installment base amount.
-    installments = data.get("installments")
-    if isinstance(installments, int) and installments > 0:
-        per_installment = data["amount"] / installments
-        data["installment_amount"] = floor(per_installment * 100) / 100
-
-    message = "¡Listo! Revisá los detalles y confirmá si todo está bien."
-
-    return {
-        "response_type": "draft",
-        "response_payload": data,
-        "messages": [AIMessage(content=message)],
-    }
-
-
-def handle_clarification(state: AgentState) -> dict:
-    """Return the clarification message from the classifier."""
-    output = state["classifier_output"]
-    text = output.clarification_message or "¿Podrías darme más detalles?"
-
-    return {
-        "response_type": "clarification",
-        "response_payload": None,
-        "messages": [AIMessage(content=text)],
-    }
-
-
-def handle_direct_answer(state: AgentState) -> dict:
-    """Return the direct answer message from the classifier."""
-    output = state["classifier_output"]
-    text = (
-        output.direct_answer_message
-        or "¡Hola! Soy vaquita, tu asistente de finanzas personales. "
-        "Puedo registrar gastos, ingresos y transferencias por texto o audio."
-        "Decime en qué te doy una mano."
+    result = resolve_transaction(
+        patch=state["parse_output"],
+        pending=state.get("pending_draft"),
+        ctx=state.get("agent_context"),
+        today=date.today(),
     )
 
+    return {
+        "response_type": result["response_type"],
+        "response_payload": result["payload"],
+        "messages": [AIMessage(content=result["message"])],
+        "missing_fields": result.get("missing_fields", []),
+        "inferred_fields": result.get("inferred_fields", []),
+    }
+
+
+def handle_chat(state: AgentState) -> dict:
+    output = state["parse_output"]
+    text = (
+        output.reply
+        or "¡Hola! Soy Vaquita, tu asistente de finanzas personales. Por ahora puedo ayudarte a registrar gastos, ingresos y transferencias — ya sea escribiendo o mandando un audio."
+    )
     return {
         "response_type": "answer",
         "response_payload": None,

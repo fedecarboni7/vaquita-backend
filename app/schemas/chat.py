@@ -1,6 +1,23 @@
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+
+
+class PendingDraft(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    type: Literal["expense", "income", "transfer"] | None = None
+    amount: float | None = None
+    to_amount: float | None = None
+    description: str | None = None
+    account_id: str | None = None
+    account_destination_id: str | None = None
+    category_id: str | None = None
+    subcategory_id: str | None = None
+    expense_date: str | None = None
+    currency: Literal["ARS", "USD"] | None = None
+    installments: int | None = None
+    note: str | None = None
 
 
 class ChatMessageIn(BaseModel):
@@ -10,6 +27,7 @@ class ChatMessageIn(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessageIn]
+    pending_draft: PendingDraft | None = None
 
 
 class ChatResponse(BaseModel):
